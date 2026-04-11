@@ -1,0 +1,20 @@
+🗄️ Structură Bază de Date - Proiect Splitmate
+Acest folder conține scriptul SQL necesar pentru inițializarea bazei de date a aplicației Splitmate. Structura a fost proiectată pentru a susține procesul de gestionare și împărțire a cheltuielilor între utilizatori.
+
+
+Fișiere incluse:
+Splitmate_DB_Setup.sql: Script complet pentru crearea tabelelor și inserarea unui set de date de test (3 rânduri per tabel).
+
+Tabele Principale și Relații:
+1)Users: Stochează datele de identificare ale utilizatorilor (username, email, password).
+2)Groups: Gestionează grupurile create pentru partajarea cheltuielilor.
+3)GroupMembers: Tabel de legătură care implementează lista de membri a fiecărui grup (Many-to-Many).
+4)Expenses: Înregistrează fiecare cheltuială adăugată, asociind-o unui grup specific.
+5)Debts: Calculează și stochează datoriile individuale dintre utilizatori (cine datorează cui) pe baza cheltuielilor.
+6)Friends: Gestionează listele de prieteni ale utilizatorilor.
+
+
+Detalii Tehnice:
+-SGBD: Microsoft SQL Server.
+-Tipuri de date: S-a utilizat DECIMAL(18,2) pentru sume (precizie financiară) și NVARCHAR pentru suport Unicode/diacritice.
+-Integritate: Toate relațiile sunt securizate prin FOREIGN KEY pentru a preveni erorile de logică în backend.
