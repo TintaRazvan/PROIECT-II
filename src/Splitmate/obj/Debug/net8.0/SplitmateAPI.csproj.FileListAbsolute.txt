@@ -1,0 +1,9 @@
+C:\Users\lucam\PROIECT-II\src\Splitmate\obj\Debug\net8.0\SplitmateAPI.csproj.AssemblyReference.cache
+C:\Users\lucam\PROIECT-II\src\Splitmate\obj\Debug\net8.0\rpswa.dswa.cache.json
+C:\Users\lucam\PROIECT-II\src\Splitmate\obj\Debug\net8.0\SplitmateAPI.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\lucam\PROIECT-II\src\Splitmate\obj\Debug\net8.0\SplitmateAPI.AssemblyInfoInputs.cache
+C:\Users\lucam\PROIECT-II\src\Splitmate\obj\Debug\net8.0\SplitmateAPI.AssemblyInfo.cs
+C:\Users\lucam\PROIECT-II\src\Splitmate\obj\Debug\net8.0\SplitmateAPI.csproj.CoreCompileInputs.cache
+C:\Users\lucam\PROIECT-II\src\Splitmate\obj\Debug\net8.0\SplitmateAPI.MvcApplicationPartsAssemblyInfo.cs
+C:\Users\lucam\PROIECT-II\src\Splitmate\obj\Debug\net8.0\SplitmateAPI.MvcApplicationPartsAssemblyInfo.cache
+C:\Users\lucam\PROIECT-II\src\Splitmate\obj\Debug\net8.0\SplitmateAPI.sourcelink.json
