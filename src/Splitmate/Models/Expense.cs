@@ -1,4 +1,4 @@
-﻿namespace SplitmateAPI.Models
+namespace SplitmateAPI.Models
 {
     public class Expense
     {
@@ -8,9 +8,9 @@
         public string Description { get; set; } = string.Empty;
 
         public int PayerId { get; set; }
-        public User Payer { get; set; } = null!;
+        public User? Payer { get; set; }
 
         public int GroupId { get; set; }
-        public Group Group { get; set; } = null!;
+        public Group? Group { get; set; }
     }
 }
