@@ -35,7 +35,7 @@ function Register() {
             localStorage.setItem('splitmate_user', JSON.stringify(user));
             navigate('/dashboard');
         } catch (err) {
-            setError('Nu s-a putut crea contul. Verifică dacă API-ul rulează.');
+            setError(err.message || 'Nu s-a putut crea contul.');
         } finally {
             setLoading(false);
         }

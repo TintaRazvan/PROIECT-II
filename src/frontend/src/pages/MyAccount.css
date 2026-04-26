@@ -1,0 +1,190 @@
+.account {
+    min-height: 100vh;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+}
+
+.account-header {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 2rem 1.2rem 1rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1rem;
+}
+
+.account-header h1 {
+    font-size: 1.9rem;
+    margin-bottom: 0.4rem;
+}
+
+.account-header p {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+.account-header-actions {
+    display: flex;
+    gap: 0.6rem;
+}
+
+.account-main {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 0 1.2rem 2rem;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+}
+
+.account-card {
+    background: var(--bg-secondary);
+    border: 1px solid rgba(125, 212, 200, 0.12);
+    border-radius: 10px;
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+}
+
+.account-card h2 {
+    font-size: 1rem;
+    margin-bottom: 0.2rem;
+}
+
+.account-card label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    font-size: 0.82rem;
+    color: var(--text-muted);
+}
+
+.account-card input,
+.account-card select {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(125, 212, 200, 0.2);
+    border-radius: 6px;
+    color: var(--text-primary);
+    padding: 0.55rem 0.7rem;
+    font-size: 0.9rem;
+    font-family: 'Inter', sans-serif;
+}
+
+.account-card input:focus,
+.account-card select:focus {
+    outline: none;
+    border-color: var(--teal-light);
+}
+
+.account-btn {
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: var(--orange);
+    color: #fff;
+    border-radius: 6px;
+    padding: 0.5rem 0.9rem;
+    font-size: 0.84rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.2s;
+    text-align: center;
+}
+
+.account-btn:hover {
+    opacity: 0.88;
+}
+
+.account-btn--ghost {
+    background: transparent;
+    color: var(--text-secondary);
+}
+
+.account-btn--ghost:hover {
+    border-color: var(--teal-light);
+    color: var(--teal-light);
+    opacity: 1;
+}
+
+.account-message,
+.account-error {
+    grid-column: 1 / -1;
+    border-radius: 8px;
+    padding: 0.7rem 0.9rem;
+    font-size: 0.85rem;
+}
+
+.account-message {
+    background: rgba(125, 212, 200, 0.1);
+    border: 1px solid rgba(125, 212, 200, 0.2);
+    color: var(--teal-light);
+}
+
+.account-error {
+    background: rgba(232, 105, 42, 0.1);
+    border: 1px solid rgba(232, 105, 42, 0.25);
+    color: var(--orange);
+}
+
+.account-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.5rem;
+}
+
+.account-stats div {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 8px;
+    padding: 0.65rem;
+    text-align: center;
+}
+
+.account-stats strong {
+    display: block;
+    color: var(--teal-light);
+    font-size: 1.2rem;
+}
+
+.account-stats span {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.account-progress {
+    width: 100%;
+    height: 8px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.08);
+    overflow: hidden;
+}
+
+.account-progress div {
+    height: 100%;
+    background: linear-gradient(90deg, var(--teal-light), var(--orange));
+}
+
+.account-muted {
+    color: var(--text-muted);
+    font-size: 0.83rem;
+}
+
+.account-switch {
+    flex-direction: row !important;
+    align-items: center;
+    gap: 0.5rem !important;
+}
+
+.account-switch input {
+    width: auto;
+}
+
+@media (max-width: 760px) {
+    .account-main {
+        grid-template-columns: 1fr;
+    }
+
+    .account-header {
+        flex-direction: column;
+    }
+}

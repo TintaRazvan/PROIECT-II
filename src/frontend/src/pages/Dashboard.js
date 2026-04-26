@@ -100,6 +100,7 @@ function Dashboard() {
                 </Link>
                 <div className="dash-user">
                     {user && <span className="dash-username">{user.username}</span>}
+                    <Link to="/my-account" className="dash-logout">My Account</Link>
                     <button onClick={logout} className="dash-logout">Ieși</button>
                 </div>
             </header>

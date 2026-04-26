@@ -13,7 +13,42 @@ export async function createUser(data) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
     });
-    if (!res.ok) throw new Error('Eroare la crearea contului');
+    if (!res.ok) {
+        const message = await res.text();
+        throw new Error(message || 'Eroare la crearea contului');
+    }
+    return res.json();
+}
+
+export async function getUserById(userId) {
+    const res = await fetch(`${API}/User/${userId}`);
+    if (!res.ok) throw new Error('Eroare la obținerea profilului');
+    return res.json();
+}
+
+export async function updateUserProfile(userId, data) {
+    const res = await fetch(`${API}/User/${userId}/profile`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+        const message = await res.text();
+        throw new Error(message || 'Eroare la actualizarea profilului');
+    }
+    return res.json();
+}
+
+export async function changeUserPassword(userId, data) {
+    const res = await fetch(`${API}/User/${userId}/password`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+        const message = await res.text();
+        throw new Error(message || 'Eroare la schimbarea parolei');
+    }
     return res.json();
 }
 
