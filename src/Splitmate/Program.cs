@@ -9,6 +9,16 @@ namespace Splitmate
 
             // Add services to the container.
 
+            builder.Services.AddCors(options =>
+            {
+                options.AddPolicy("AllowReact", policy =>
+                {
+                    policy.WithOrigins("http://localhost:3000")
+                          .AllowAnyHeader()
+                          .AllowAnyMethod();
+                });
+            });
+
             builder.Services.AddControllers();
             // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
             builder.Services.AddEndpointsApiExplorer();
@@ -24,6 +34,8 @@ namespace Splitmate
             }
 
             app.UseHttpsRedirection();
+
+            app.UseCors("AllowReact");
 
             app.UseAuthorization();
 

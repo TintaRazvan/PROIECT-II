@@ -1,0 +1,122 @@
+.register-page {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    background: var(--bg-primary);
+}
+
+.register-card {
+    width: 100%;
+    max-width: 400px;
+    background: var(--bg-secondary);
+    border: 1px solid rgba(125, 212, 200, 0.1);
+    border-radius: 14px;
+    padding: 2.2rem 2rem;
+}
+
+.register-back {
+    display: inline-block;
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    margin-bottom: 1.2rem;
+    transition: color 0.2s;
+}
+
+.register-back:hover {
+    color: var(--teal-light);
+}
+
+.register-card h1 {
+    font-size: 1.5rem;
+    font-weight: 800;
+    margin-bottom: 0.3rem;
+}
+
+.register-sub {
+    font-size: 0.88rem;
+    color: var(--text-muted);
+    margin-bottom: 1.8rem;
+}
+
+.register-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.1rem;
+}
+
+.register-form label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}
+
+.register-form label span {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.register-form input {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(125, 212, 200, 0.12);
+    border-radius: 6px;
+    padding: 0.65rem 0.85rem;
+    color: var(--text-primary);
+    font-family: 'Inter', sans-serif;
+    font-size: 0.9rem;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.register-form input:focus {
+    border-color: var(--teal-light);
+}
+
+.register-form input::placeholder {
+    color: var(--text-muted);
+}
+
+.register-error {
+    font-size: 0.82rem;
+    color: #e8692a;
+    padding: 0.5rem 0.7rem;
+    background: rgba(232, 105, 42, 0.08);
+    border-radius: 6px;
+}
+
+.register-btn {
+    padding: 0.7rem;
+    background: var(--orange);
+    color: #fff;
+    font-weight: 600;
+    font-size: 0.95rem;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    transition: opacity 0.2s;
+    margin-top: 0.3rem;
+    font-family: 'Inter', sans-serif;
+}
+
+.register-btn:hover {
+    opacity: 0.88;
+}
+
+.register-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.register-login {
+    text-align: center;
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    margin-top: 1.5rem;
+}
+
+.register-login a {
+    color: var(--teal-light);
+    font-weight: 600;
+}
