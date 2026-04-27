@@ -1,5 +1,7 @@
-﻿using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using SplitmateAPI.Data;
 using SplitmateAPI.Models;
 
 namespace SplitmateAPI.Controllers
@@ -8,18 +10,24 @@ namespace SplitmateAPI.Controllers
     [ApiController]
     public class FriendsController : ControllerBase
     {
-        private static List<Friends> friendsList = new List<Friends>();
+        private readonly SplitmateDbContext _context;
+
+        public FriendsController(SplitmateDbContext context)
+        {
+            _context = context;
+        }
 
         [HttpGet]
-        public ActionResult<IEnumerable<Friends>> GetFriends()
+        public async Task<ActionResult<IEnumerable<Friends>>> GetFriends()
         {
-            return Ok(friendsList);
+            return Ok(await _context.Friends.ToListAsync());
         }
 
         [HttpPost]
-        public ActionResult<Friends> AddFriend(Friends newFriend)
+        public async Task<ActionResult<Friends>> AddFriend(Friends newFriend)
         {
-            friendsList.Add(newFriend);
+            _context.Friends.Add(newFriend);
+            await _context.SaveChangesAsync();
             return Ok(newFriend);
         }
     }

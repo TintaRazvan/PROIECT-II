@@ -1,5 +1,7 @@
-﻿using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using SplitmateAPI.Data;
 using SplitmateAPI.Models;
 
 namespace SplitmateAPI.Controllers
@@ -8,17 +10,21 @@ namespace SplitmateAPI.Controllers
     [ApiController]
     public class UserController : ControllerBase
     {
-        private static List<User> users = new List<User>();
-        private static int nextId = 1;
+        private readonly SplitmateDbContext _context;
+
+        public UserController(SplitmateDbContext context)
+        {
+            _context = context;
+        }
 
         [HttpGet]
-        public ActionResult<IEnumerable<User>> GetUsers()
+        public async Task<ActionResult<IEnumerable<User>>> GetUsers()
         {
-            return Ok(users);
+            return Ok(await _context.Users.ToListAsync());
         }
 
         [HttpPost]
-        public ActionResult<User> CreateUser(User newUser)
+        public async Task<ActionResult<User>> CreateUser(User newUser)
         {
             if (string.IsNullOrWhiteSpace(newUser.Username) ||
                 string.IsNullOrWhiteSpace(newUser.Email) ||
@@ -27,20 +33,20 @@ namespace SplitmateAPI.Controllers
                 return BadRequest("Username, email și parola sunt obligatorii.");
             }
 
-            if (users.Any(u => u.Email.Equals(newUser.Email, StringComparison.OrdinalIgnoreCase)))
+            if (await _context.Users.AnyAsync(u => u.Email.ToLower() == newUser.Email.ToLower()))
             {
                 return BadRequest("Există deja un cont cu acest email.");
             }
 
-            newUser.Id = nextId++;
-            users.Add(newUser);
+            _context.Users.Add(newUser);
+            await _context.SaveChangesAsync();
             return Ok(newUser);
         }
 
         [HttpGet("{id}")]
-        public ActionResult<User> GetUserById(int id)
+        public async Task<ActionResult<User>> GetUserById(int id)
         {
-            var user = users.FirstOrDefault(u => u.Id == id);
+            var user = await _context.Users.FindAsync(id);
             if (user == null)
             {
                 return NotFound(new { message = $"Utilizatorul cu ID-ul {id} nu a fost găsit." });
@@ -50,9 +56,9 @@ namespace SplitmateAPI.Controllers
         }
 
         [HttpPut("{id}/profile")]
-        public ActionResult<User> UpdateProfile(int id, UpdateUserProfileRequest request)
+        public async Task<ActionResult<User>> UpdateProfile(int id, UpdateUserProfileRequest request)
         {
-            var user = users.FirstOrDefault(u => u.Id == id);
+            var user = await _context.Users.FindAsync(id);
             if (user == null)
             {
                 return NotFound(new { message = $"Utilizatorul cu ID-ul {id} nu a fost găsit." });
@@ -63,9 +69,9 @@ namespace SplitmateAPI.Controllers
                 return BadRequest("Username și email sunt obligatorii.");
             }
 
-            if (users.Any(u =>
+            if (await _context.Users.AnyAsync(u =>
                 u.Id != id &&
-                u.Email.Equals(request.Email, StringComparison.OrdinalIgnoreCase)))
+                u.Email.ToLower() == request.Email.ToLower()))
             {
                 return BadRequest("Email-ul este deja folosit de alt utilizator.");
             }
@@ -73,13 +79,14 @@ namespace SplitmateAPI.Controllers
             user.Username = request.Username.Trim();
             user.Email = request.Email.Trim();
 
+            await _context.SaveChangesAsync();
             return Ok(user);
         }
 
         [HttpPut("{id}/password")]
-        public IActionResult ChangePassword(int id, ChangePasswordRequest request)
+        public async Task<IActionResult> ChangePassword(int id, ChangePasswordRequest request)
         {
-            var user = users.FirstOrDefault(u => u.Id == id);
+            var user = await _context.Users.FindAsync(id);
             if (user == null)
             {
                 return NotFound(new { message = $"Utilizatorul cu ID-ul {id} nu a fost găsit." });
@@ -101,6 +108,7 @@ namespace SplitmateAPI.Controllers
             }
 
             user.Password = request.NewPassword;
+            await _context.SaveChangesAsync();
             return Ok(new { message = "Parola a fost actualizată cu succes." });
         }
 

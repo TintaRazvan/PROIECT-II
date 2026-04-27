@@ -1,5 +1,7 @@
-﻿using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using SplitmateAPI.Data;
 using SplitmateAPI.Models;
 
 namespace SplitmateAPI.Controllers
@@ -8,35 +10,42 @@ namespace SplitmateAPI.Controllers
     [ApiController]
     public class ExpenseController : ControllerBase
     {
-        private static List<Expense> expenses = new List<Expense>();
+        private readonly SplitmateDbContext _context;
+
+        public ExpenseController(SplitmateDbContext context)
+        {
+            _context = context;
+        }
 
         [HttpGet]
-        public ActionResult<IEnumerable<Expense>> GetExpenses()
+        public async Task<ActionResult<IEnumerable<Expense>>> GetExpenses()
         {
-            return Ok(expenses);
+            return Ok(await _context.Expenses.ToListAsync());
         }
 
         [HttpPost]
-        public ActionResult<Expense> AddExpense(Expense newExpense)
+        public async Task<ActionResult<Expense>> AddExpense(Expense newExpense)
         {
             if (newExpense.Amount <= 0)
             {
                 return BadRequest("Suma cheltuielii trebuie să fie pozitivă.");
             }
 
-            expenses.Add(newExpense);
+            _context.Expenses.Add(newExpense);
+            await _context.SaveChangesAsync();
             return Ok(newExpense);
         }
 
         [HttpDelete("{id}")]
-        public IActionResult DeleteExpense(int id)
+        public async Task<IActionResult> DeleteExpense(int id)
         {
-            var expense = expenses.FirstOrDefault(e => e.Id == id);
+            var expense = await _context.Expenses.FindAsync(id);
             if (expense == null) {
                 return NotFound(new { message = $"Datoria cu ID-ul {id} nu a fost gasita." });
             }
 
-            expenses.Remove(expense);
+            _context.Expenses.Remove(expense);
+            await _context.SaveChangesAsync();
             return Ok(new { message = "Datoria a fost stearsa cu succes." });
         }
     }

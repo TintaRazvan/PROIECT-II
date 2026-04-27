@@ -1,5 +1,7 @@
-﻿using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using SplitmateAPI.Data;
 using SplitmateAPI.Models;
 
 namespace SplitmateAPI.Controllers
@@ -8,16 +10,21 @@ namespace SplitmateAPI.Controllers
     [ApiController]
     public class DebtController : ControllerBase
     {
-        private static List<Debt> debts = new List<Debt>();
+        private readonly SplitmateDbContext _context;
+
+        public DebtController(SplitmateDbContext context)
+        {
+            _context = context;
+        }
 
         [HttpGet]
-        public ActionResult<IEnumerable<Debt>> GetDebts()
+        public async Task<ActionResult<IEnumerable<Debt>>> GetDebts()
         {
-            return Ok(debts);
+            return Ok(await _context.Debts.ToListAsync());
         }
 
         [HttpPost]
-        public ActionResult<Debt> CreateDebt(Debt newDebt)
+        public async Task<ActionResult<Debt>> CreateDebt(Debt newDebt)
         {
             if (newDebt.Amount <= 0)
             {
@@ -29,47 +36,49 @@ namespace SplitmateAPI.Controllers
                 return BadRequest("Un utilizator nu poate avea o datorie către el însuși.");
             }
 
-            debts.Add(newDebt);
+            _context.Debts.Add(newDebt);
+            await _context.SaveChangesAsync();
             return Ok(newDebt);
         }
 
         [HttpDelete("{id}")]
-        public IActionResult DeleteDebt(int id)
+        public async Task<IActionResult> DeleteDebt(int id)
         {
-            var debt = debts.FirstOrDefault(d => d.Id == id);
+            var debt = await _context.Debts.FindAsync(id);
             if (debt == null)
             {
                 return NotFound(new { message = $"Datoria cu ID-ul {id} nu a fost gasita." });
             }
 
-            debts.Remove(debt);
-            return Ok(new { message = "Datoria a fost stearsa cu succes." }); // Am schimbat NoContent() cu Ok()
+            _context.Debts.Remove(debt);
+            await _context.SaveChangesAsync();
+            return Ok(new { message = "Datoria a fost stearsa cu succes." });
         }
 
         [HttpGet("summary/{userId}")]
-        public ActionResult GetUserSummary(int userId)
+        public async Task<ActionResult> GetUserSummary(int userId)
         {
-            // Calculam czt are de primit 
-            float toReceive = debts.Where(d => d.ToUserId == userId).Sum(d => d.Amount);
+            // Calculam cat are de primit 
+            var toReceive = await _context.Debts.Where(d => d.ToUserId == userId).SumAsync(d => d.Amount);
 
             // Calculam cat are de dat
-            float toPay = debts.Where(d => d.FromUserId == userId).Sum(d => d.Amount);
+            var toPay = await _context.Debts.Where(d => d.FromUserId == userId).SumAsync(d => d.Amount);
 
             // Calculam Balanta Totala
-            float balance = toReceive - toPay;
+            decimal balance = toReceive - toPay;
 
-            float total = toReceive + toPay;
+            decimal total = toReceive + toPay;
 
             // Calculam procentul pentru Pie Chart
-            float receivePercentage = total > 0 ? (toReceive / total) * 100 : 0;
-            float payPercentage = total > 0 ? (toPay / total) * 100 : 0;
+            decimal receivePercentage = total > 0 ? (toReceive / total) * 100 : 0;
+            decimal payPercentage = total > 0 ? (toPay / total) * 100 : 0;
 
             return Ok(new
             {
                 UserId = userId,
                 TotalToReceive = toReceive,
                 TotalToPay = toPay,
-                Balance = balance, 
+                Balance = balance,
                 ReceivePercentage = receivePercentage,
                 PayPercentage = payPercentage
             });
