@@ -77,10 +77,96 @@
     font-size: 0.82rem;
 }
 
+/* ── Debt Summary Card ── */
+.dash-summary {
+    display: flex;
+    align-items: center;
+    gap: 2rem;
+    background: var(--bg-secondary);
+    border: 1px solid rgba(125, 212, 200, 0.1);
+    border-radius: 12px;
+    padding: 1.5rem 1.8rem;
+    margin-bottom: 1.5rem;
+}
+
+.dash-summary-info {
+    flex: 1;
+}
+
+.dash-summary-info h3 {
+    font-size: 1rem;
+    font-weight: 700;
+    margin-bottom: 0.9rem;
+    color: var(--text-primary);
+}
+
+.dash-summary-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+}
+
+.dash-summary-row {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    font-size: 0.88rem;
+    color: var(--text-secondary);
+}
+
+.dash-summary-row--balance {
+    margin-top: 0.4rem;
+    padding-top: 0.65rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.dash-summary-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.dash-summary-dot--receive {
+    background: var(--teal-light);
+}
+
+.dash-summary-dot--pay {
+    background: var(--orange);
+}
+
+.dash-summary-val {
+    margin-left: auto;
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 700;
+    font-size: 0.92rem;
+}
+
+.dash-summary-val--receive {
+    color: var(--teal-light);
+}
+
+.dash-summary-val--pay {
+    color: var(--orange);
+}
+
+.dash-summary-chart {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.dash-pie {
+    filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.3));
+}
+
 /* Stats */
 .dash-stats {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(4, 1fr);
     gap: 1rem;
     margin-bottom: 1.5rem;
 }
@@ -112,6 +198,7 @@
     display: flex;
     gap: 0.6rem;
     margin-bottom: 1.5rem;
+    flex-wrap: wrap;
 }
 
 .dash-action-btn {
@@ -160,7 +247,8 @@
     margin-bottom: 0.2rem;
 }
 
-.dash-form input {
+.dash-form input,
+.dash-form-select {
     background: rgba(255, 255, 255, 0.04);
     border: 1px solid rgba(125, 212, 200, 0.12);
     border-radius: 6px;
@@ -171,12 +259,27 @@
     outline: none;
 }
 
-.dash-form input:focus {
+.dash-form input:focus,
+.dash-form-select:focus {
     border-color: var(--teal-light);
 }
 
 .dash-form input::placeholder {
     color: var(--text-muted);
+}
+
+.dash-form-select {
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23556882' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.8rem center;
+    padding-right: 2.2rem;
+    cursor: pointer;
+}
+
+.dash-form-select option {
+    background: var(--bg-secondary);
+    color: var(--text-primary);
 }
 
 .dash-form-btns {
@@ -254,12 +357,66 @@
     margin-top: 0.15rem;
 }
 
+.dash-list-right {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+}
+
 .dash-list-amount {
     font-family: 'Space Grotesk', sans-serif;
     font-weight: 700;
     font-size: 0.95rem;
     color: var(--teal-light);
     white-space: nowrap;
+}
+
+.dash-list-amount--negative {
+    color: var(--orange);
+}
+
+/* Delete button */
+.dash-delete-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    background: rgba(232, 105, 42, 0.08);
+    border: 1px solid rgba(232, 105, 42, 0.15);
+    color: var(--text-muted);
+    font-size: 0.72rem;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s, border-color 0.2s;
+    flex-shrink: 0;
+}
+
+.dash-delete-btn:hover {
+    background: rgba(232, 105, 42, 0.2);
+    color: var(--orange);
+    border-color: var(--orange);
+}
+
+/* Friend info */
+.dash-friend-info {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.dash-friend-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: #fff;
+    background: var(--teal-dark);
+    flex-shrink: 0;
 }
 
 /* Responsive */
@@ -269,10 +426,214 @@
     }
 
     .dash-stats {
-        grid-template-columns: 1fr;
+        grid-template-columns: repeat(2, 1fr);
     }
 
     .dash-actions {
         flex-direction: column;
     }
+
+    .dash-summary {
+        flex-direction: column;
+        gap: 1.2rem;
+        text-align: center;
+    }
+
+    .dash-summary-row {
+        justify-content: center;
+    }
+}
+
+/* ── Group cards ── */
+.dash-group-card {
+    border: 1px solid rgba(125, 212, 200, 0.06);
+    border-radius: 10px;
+    margin-bottom: 0.5rem;
+    overflow: hidden;
+    transition: border-color 0.2s;
+}
+
+.dash-group-card--open {
+    border-color: rgba(125, 212, 200, 0.18);
+}
+
+.dash-group-header {
+    cursor: pointer;
+    padding: 0.85rem 1rem !important;
+    transition: background 0.2s;
+}
+
+.dash-group-header:hover {
+    background: rgba(125, 212, 200, 0.04);
+}
+
+.dash-group-arrow {
+    font-size: 1rem;
+    color: var(--text-muted);
+    transition: transform 0.25s ease;
+    display: inline-block;
+}
+
+.dash-group-arrow--open {
+    transform: rotate(90deg);
+    color: var(--teal-light);
+}
+
+.dash-group-body {
+    padding: 0.5rem 1rem 1rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.04);
+    background: rgba(0, 0, 0, 0.1);
+    animation: groupSlide 0.2s ease;
+}
+
+@keyframes groupSlide {
+    from { opacity: 0; transform: translateY(-6px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.dash-group-empty {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    padding: 0.5rem 0;
+}
+
+.dash-group-members {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+    margin-bottom: 0.8rem;
+}
+
+.dash-group-member {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.4rem 0.5rem;
+    border-radius: 6px;
+    transition: background 0.15s;
+}
+
+.dash-group-member:hover {
+    background: rgba(125, 212, 200, 0.05);
+}
+
+.dash-group-member-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.dash-group-member-name {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.dash-group-member-email {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+}
+
+.dash-group-add {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.dash-group-add .dash-form-select {
+    flex: 1;
+    margin: 0;
+    font-size: 0.82rem;
+    padding: 0.5rem 0.7rem;
+}
+
+.dash-group-add-btn {
+    white-space: nowrap;
+    padding: 0.5rem 1rem !important;
+    font-size: 0.8rem !important;
+}
+
+/* ── Group expense section ── */
+.dash-group-section {
+    margin-top: 0.9rem;
+    padding-top: 0.8rem;
+    border-top: 1px solid rgba(125, 212, 200, 0.08);
+}
+
+.dash-group-section-title {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: var(--text-secondary);
+    margin-bottom: 0.5rem;
+}
+
+.dash-group-expenses {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    margin-top: 0.5rem;
+}
+
+.dash-group-expense {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.45rem 0.5rem;
+    border-radius: 6px;
+    transition: background 0.15s;
+}
+
+.dash-group-expense:hover {
+    background: rgba(125, 212, 200, 0.05);
+}
+
+.dash-group-expense-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.dash-group-expense-total {
+    margin-top: 0.4rem;
+    padding: 0.5rem 0.6rem;
+    background: rgba(125, 212, 200, 0.06);
+    border-radius: 6px;
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: var(--teal-light);
+    text-align: right;
+}
+
+.dash-group-add-expense {
+    display: flex;
+    gap: 0.4rem;
+    align-items: center;
+    margin-top: 0.6rem;
+}
+
+.dash-group-add-expense input {
+    flex: 1;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(125, 212, 200, 0.12);
+    border-radius: 6px;
+    padding: 0.5rem 0.7rem;
+    color: var(--text-primary);
+    font-family: 'Inter', sans-serif;
+    font-size: 0.82rem;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.dash-group-add-expense input:focus {
+    border-color: var(--teal-light);
+}
+
+.dash-group-add-expense input::placeholder {
+    color: var(--text-muted);
+}
+
+/* Group tag on main expense list */
+.dash-list-group-tag {
+    color: var(--teal-light);
+    font-weight: 600;
 }

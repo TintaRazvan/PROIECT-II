@@ -36,6 +36,22 @@ namespace SplitmateAPI.Controllers
                 return BadRequest("Un utilizator nu poate avea o datorie către el însuși.");
             }
 
+            var fromUserExists = await _context.Users.AnyAsync(u => u.Id == newDebt.FromUserId);
+            var toUserExists = await _context.Users.AnyAsync(u => u.Id == newDebt.ToUserId);
+            if (!fromUserExists || !toUserExists)
+            {
+                return BadRequest("Unul dintre utilizatori nu există.");
+            }
+
+            if (newDebt.ExpenseId > 0)
+            {
+                var expenseExists = await _context.Expenses.AnyAsync(e => e.Id == newDebt.ExpenseId);
+                if (!expenseExists)
+                {
+                    return BadRequest("Cheltuiala asociată datoriei nu există.");
+                }
+            }
+
             _context.Debts.Add(newDebt);
             await _context.SaveChangesAsync();
             return Ok(newDebt);
@@ -58,6 +74,12 @@ namespace SplitmateAPI.Controllers
         [HttpGet("summary/{userId}")]
         public async Task<ActionResult> GetUserSummary(int userId)
         {
+            var userExists = await _context.Users.AnyAsync(u => u.Id == userId);
+            if (!userExists)
+            {
+                return NotFound("Utilizatorul nu există.");
+            }
+
             // Calculam cat are de primit 
             var toReceive = await _context.Debts.Where(d => d.ToUserId == userId).SumAsync(d => d.Amount);
 
@@ -82,6 +104,41 @@ namespace SplitmateAPI.Controllers
                 ReceivePercentage = receivePercentage,
                 PayPercentage = payPercentage
             });
+        }
+
+        [HttpGet("history/{userId}")]
+        public async Task<ActionResult> GetUserTransactionHistory(int userId)
+        {
+            var userExists = await _context.Users.AnyAsync(u => u.Id == userId);
+            if (!userExists)
+            {
+                return NotFound("Utilizatorul nu există.");
+            }
+
+            var history = await (
+                from debt in _context.Debts
+                join fromUser in _context.Users on debt.FromUserId equals fromUser.Id
+                join toUser in _context.Users on debt.ToUserId equals toUser.Id
+                join expense in _context.Expenses on debt.ExpenseId equals expense.Id into expenseJoin
+                from expense in expenseJoin.DefaultIfEmpty()
+                where debt.FromUserId == userId || debt.ToUserId == userId
+                orderby expense != null ? expense.Date : DateTime.MinValue descending, debt.Id descending
+                select new
+                {
+                    debt.Id,
+                    debt.Amount,
+                    debt.FromUserId,
+                    FromUsername = fromUser.Username,
+                    debt.ToUserId,
+                    ToUsername = toUser.Username,
+                    debt.ExpenseId,
+                    ExpenseDescription = expense != null ? expense.Description : "Datorie manuală",
+                    TransactionDate = expense != null ? expense.Date : (DateTime?)null,
+                    Direction = debt.FromUserId == userId ? "outgoing" : "incoming"
+                })
+                .ToListAsync();
+
+            return Ok(history);
         }
     }
 }

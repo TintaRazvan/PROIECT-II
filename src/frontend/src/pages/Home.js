@@ -39,6 +39,7 @@ function Home() {
                     <a href="#categories">Categorii</a>
                     <a href="#features">Funcționalități</a>
                     <a href="#how">Cum funcționează</a>
+                    <Link to="/login">Conectează-te</Link>
                     <Link to="/register" className="nav-btn">Începe acum</Link>
                 </div>
             </nav>

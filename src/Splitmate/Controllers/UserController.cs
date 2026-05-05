@@ -43,6 +43,30 @@ namespace SplitmateAPI.Controllers
             return Ok(newUser);
         }
 
+        [HttpPost("login")]
+        public async Task<ActionResult<User>> Login(LoginRequest request)
+        {
+            if (string.IsNullOrWhiteSpace(request.Email) || string.IsNullOrWhiteSpace(request.Password))
+            {
+                return BadRequest("Email-ul și parola sunt obligatorii.");
+            }
+
+            var user = await _context.Users.FirstOrDefaultAsync(
+                u => u.Email.ToLower() == request.Email.ToLower());
+
+            if (user == null)
+            {
+                return BadRequest("Nu există niciun cont cu acest email.");
+            }
+
+            if (user.Password != request.Password)
+            {
+                return BadRequest("Parola este incorectă.");
+            }
+
+            return Ok(user);
+        }
+
         [HttpGet("{id}")]
         public async Task<ActionResult<User>> GetUserById(int id)
         {
@@ -122,6 +146,12 @@ namespace SplitmateAPI.Controllers
         {
             public string CurrentPassword { get; set; } = string.Empty;
             public string NewPassword { get; set; } = string.Empty;
+        }
+
+        public class LoginRequest
+        {
+            public string Email { get; set; } = string.Empty;
+            public string Password { get; set; } = string.Empty;
         }
     }
 }

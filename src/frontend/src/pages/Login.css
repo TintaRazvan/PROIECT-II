@@ -1,0 +1,128 @@
+.login-page {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-primary);
+    padding: 2rem;
+}
+
+.login-card {
+    width: 100%;
+    max-width: 420px;
+    background: var(--bg-secondary);
+    border: 1px solid rgba(125, 212, 200, 0.1);
+    border-radius: 14px;
+    padding: 2.5rem 2rem;
+}
+
+.login-back {
+    display: inline-block;
+    font-size: 0.82rem;
+    color: var(--teal-light);
+    margin-bottom: 1.2rem;
+    transition: opacity 0.2s;
+}
+
+.login-back:hover {
+    opacity: 0.7;
+}
+
+.login-card h1 {
+    font-size: 1.6rem;
+    font-weight: 800;
+    margin-bottom: 0.3rem;
+}
+
+.login-sub {
+    font-size: 0.88rem;
+    color: var(--text-muted);
+    margin-bottom: 1.8rem;
+}
+
+.login-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.1rem;
+}
+
+.login-form label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.login-form label span {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.login-form input {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(125, 212, 200, 0.12);
+    border-radius: 6px;
+    padding: 0.65rem 0.9rem;
+    color: var(--text-primary);
+    font-family: 'Inter', sans-serif;
+    font-size: 0.9rem;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.login-form input:focus {
+    border-color: var(--teal-light);
+}
+
+.login-form input::placeholder {
+    color: var(--text-muted);
+}
+
+.login-error {
+    padding: 0.6rem 0.9rem;
+    background: rgba(232, 105, 42, 0.1);
+    border: 1px solid rgba(232, 105, 42, 0.2);
+    border-radius: 6px;
+    font-size: 0.82rem;
+    color: var(--orange);
+}
+
+.login-btn {
+    padding: 0.7rem;
+    background: var(--orange);
+    color: #fff;
+    font-weight: 600;
+    font-size: 0.95rem;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    transition: opacity 0.2s, transform 0.2s;
+    font-family: 'Inter', sans-serif;
+    margin-top: 0.3rem;
+}
+
+.login-btn:hover:not(:disabled) {
+    opacity: 0.88;
+    transform: translateY(-1px);
+}
+
+.login-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.login-register {
+    text-align: center;
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    margin-top: 1.5rem;
+}
+
+.login-register a {
+    color: var(--teal-light);
+    font-weight: 600;
+}
+
+.login-register a:hover {
+    text-decoration: underline;
+}

@@ -1,4 +1,4 @@
-const API = 'http://localhost:5238/api';
+const API = 'http://localhost:7252/api';
 
 // ── Users ──
 export async function getUsers() {
@@ -16,6 +16,19 @@ export async function createUser(data) {
     if (!res.ok) {
         const message = await res.text();
         throw new Error(message || 'Eroare la crearea contului');
+    }
+    return res.json();
+}
+
+export async function loginUser(data) {
+    const res = await fetch(`${API}/User/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+        const message = await res.text();
+        throw new Error(message || 'Eroare la autentificare');
     }
     return res.json();
 }
@@ -69,6 +82,33 @@ export async function createGroup(data) {
     return res.json();
 }
 
+export async function getGroupMembers(groupId) {
+    const res = await fetch(`${API}/Group/${groupId}/members`);
+    if (!res.ok) throw new Error('Eroare la obținerea membrilor');
+    return res.json();
+}
+
+export async function addGroupMember(groupId, userId) {
+    const res = await fetch(`${API}/Group/${groupId}/members`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId }),
+    });
+    if (!res.ok) {
+        const message = await res.text();
+        throw new Error(message || 'Eroare la adăugarea membrului');
+    }
+    return res.json();
+}
+
+export async function removeGroupMember(groupId, userId) {
+    const res = await fetch(`${API}/Group/${groupId}/members/${userId}`, {
+        method: 'DELETE',
+    });
+    if (!res.ok) throw new Error('Eroare la eliminarea membrului');
+    return res.json();
+}
+
 // ── Expenses ──
 export async function getExpenses() {
     const res = await fetch(`${API}/Expense`);
@@ -82,7 +122,18 @@ export async function addExpense(data) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
     });
-    if (!res.ok) throw new Error('Eroare la adăugarea cheltuielii');
+    if (!res.ok) {
+        const message = await res.text();
+        throw new Error(message || 'Eroare la adăugarea cheltuielii');
+    }
+    return res.json();
+}
+
+export async function deleteExpense(id) {
+    const res = await fetch(`${API}/Expense/${id}`, {
+        method: 'DELETE',
+    });
+    if (!res.ok) throw new Error('Eroare la ștergerea cheltuielii');
     return res.json();
 }
 
@@ -103,10 +154,30 @@ export async function createDebt(data) {
     return res.json();
 }
 
+export async function deleteDebt(id) {
+    const res = await fetch(`${API}/Debt/${id}`, {
+        method: 'DELETE',
+    });
+    if (!res.ok) throw new Error('Eroare la ștergerea datoriei');
+    return res.json();
+}
+
+export async function getDebtSummary(userId) {
+    const res = await fetch(`${API}/Debt/summary/${userId}`);
+    if (!res.ok) throw new Error('Eroare la obținerea sumarului datoriilor');
+    return res.json();
+}
+
 // ── Friends ──
 export async function getFriends() {
     const res = await fetch(`${API}/Friends`);
     if (!res.ok) throw new Error('Eroare la obținerea prietenilor');
+    return res.json();
+}
+
+export async function getFriendsByUser(userId) {
+    const res = await fetch(`${API}/Friends?userId=${userId}`);
+    if (!res.ok) throw new Error('Eroare la obținerea prietenilor utilizatorului');
     return res.json();
 }
 
@@ -117,5 +188,19 @@ export async function addFriend(data) {
         body: JSON.stringify(data),
     });
     if (!res.ok) throw new Error('Eroare la adăugarea prietenului');
+    return res.json();
+}
+
+export async function removeFriend(userId, friendId) {
+    const res = await fetch(`${API}/Friends?userId=${userId}&friendId=${friendId}`, {
+        method: 'DELETE',
+    });
+    if (!res.ok) throw new Error('Eroare la ștergerea prietenului');
+    return res.json();
+}
+
+export async function getDebtHistory(userId) {
+    const res = await fetch(`${API}/Debt/history/${userId}`);
+    if (!res.ok) throw new Error('Eroare la obținerea istoricului tranzacțiilor');
     return res.json();
 }

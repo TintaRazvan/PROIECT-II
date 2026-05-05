@@ -91,7 +91,7 @@ function Register() {
                 </form>
 
                 <p className="register-login">
-                    Ai deja cont? <Link to="/dashboard">Intră în dashboard</Link>
+                    Ai deja cont? <Link to="/login">Conectează-te</Link>
                 </p>
             </div>
         </div>

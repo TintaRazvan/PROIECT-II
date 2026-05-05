@@ -12,12 +12,42 @@ namespace SplitmateAPI.Data
         public DbSet<Expense> Expenses { get; set; }
         public DbSet<Debt> Debts { get; set; }
         public DbSet<Friends> Friends { get; set; }
+        public DbSet<GroupMember> GroupMembers { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             // Friends are composite key (userId, friendId)
             modelBuilder.Entity<Friends>()
                 .HasKey(f => new { f.UserId, f.FriendId });
+
+            // Fix cascade delete cycle: both FKs point to Users
+            modelBuilder.Entity<Friends>()
+                .HasOne(f => f.User)
+                .WithMany()
+                .HasForeignKey(f => f.UserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Friends>()
+                .HasOne(f => f.Friend)
+                .WithMany()
+                .HasForeignKey(f => f.FriendId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // GroupMembers composite key
+            modelBuilder.Entity<GroupMember>()
+                .HasKey(gm => new { gm.GroupId, gm.UserId });
+
+            modelBuilder.Entity<GroupMember>()
+                .HasOne(gm => gm.Group)
+                .WithMany()
+                .HasForeignKey(gm => gm.GroupId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<GroupMember>()
+                .HasOne(gm => gm.User)
+                .WithMany()
+                .HasForeignKey(gm => gm.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
 
             // Ignore navigation properties that don't exist in DB
             modelBuilder.Entity<User>()
@@ -39,6 +69,15 @@ namespace SplitmateAPI.Data
                 .Ignore(e => e.PayerId)
                 .Ignore(e => e.Payer)
                 .Ignore(e => e.Group);
+
+            // Decimal precision for Amount columns
+            modelBuilder.Entity<Debt>()
+                .Property(d => d.Amount)
+                .HasPrecision(18, 2);
+
+            modelBuilder.Entity<Expense>()
+                .Property(e => e.Amount)
+                .HasPrecision(18, 2);
         }
     }
 }
