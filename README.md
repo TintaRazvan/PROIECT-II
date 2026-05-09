@@ -102,3 +102,4 @@ Frontend:
 cd src/frontend
 npm start
 ```
+EDITAT PENTRU TINTA
