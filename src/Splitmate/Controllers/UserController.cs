@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using SplitmateAPI.Data;
 using SplitmateAPI.Models;
@@ -11,20 +12,27 @@ namespace SplitmateAPI.Controllers
     public class UserController : ControllerBase
     {
         private readonly SplitmateDbContext _context;
+        private readonly PasswordHasher<User> _passwordHasher = new();
 
         public UserController(SplitmateDbContext context)
         {
             _context = context;
         }
 
+        // DTO to avoid exposing passwords in API responses
+        private object SafeUser(User u) => new { u.Id, u.Username, u.Email };
+
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<User>>> GetUsers()
+        public async Task<ActionResult<IEnumerable<object>>> GetUsers()
         {
-            return Ok(await _context.Users.ToListAsync());
+            var users = await _context.Users
+                .Select(u => new { u.Id, u.Username, u.Email })
+                .ToListAsync();
+            return Ok(users);
         }
 
         [HttpPost]
-        public async Task<ActionResult<User>> CreateUser(User newUser)
+        public async Task<ActionResult<object>> CreateUser(User newUser)
         {
             if (string.IsNullOrWhiteSpace(newUser.Username) ||
                 string.IsNullOrWhiteSpace(newUser.Email) ||
@@ -33,18 +41,39 @@ namespace SplitmateAPI.Controllers
                 return BadRequest("Username, email și parola sunt obligatorii.");
             }
 
+            if (newUser.Password.Length < 6)
+            {
+                return BadRequest("Parola trebuie să aibă minim 6 caractere.");
+            }
+
+            newUser.Username = newUser.Username.Trim();
+            newUser.Email = newUser.Email.Trim();
+
             if (await _context.Users.AnyAsync(u => u.Email.ToLower() == newUser.Email.ToLower()))
             {
                 return BadRequest("Există deja un cont cu acest email.");
             }
 
+            if (await _context.Users.AnyAsync(u => u.Username.ToLower() == newUser.Username.ToLower()))
+            {
+                return BadRequest("Există deja un cont cu acest username.");
+            }
+
+            newUser.Password = _passwordHasher.HashPassword(newUser, newUser.Password);
             _context.Users.Add(newUser);
-            await _context.SaveChangesAsync();
-            return Ok(newUser);
+            try
+            {
+                await _context.SaveChangesAsync();
+            }
+            catch (DbUpdateException)
+            {
+                return BadRequest("Email-ul sau username-ul este deja folosit.");
+            }
+            return Ok(SafeUser(newUser));
         }
 
         [HttpPost("login")]
-        public async Task<ActionResult<User>> Login(LoginRequest request)
+        public async Task<ActionResult<object>> Login(LoginRequest request)
         {
             if (string.IsNullOrWhiteSpace(request.Email) || string.IsNullOrWhiteSpace(request.Password))
             {
@@ -59,16 +88,29 @@ namespace SplitmateAPI.Controllers
                 return BadRequest("Nu există niciun cont cu acest email.");
             }
 
-            if (user.Password != request.Password)
+            var passwordVerification = _passwordHasher.VerifyHashedPassword(user, user.Password, request.Password);
+            if (passwordVerification == PasswordVerificationResult.Failed)
             {
-                return BadRequest("Parola este incorectă.");
+                // Backward compatibility for users created before password hashing.
+                if (user.Password != request.Password)
+                {
+                    return BadRequest("Parola este incorectă.");
+                }
+
+                user.Password = _passwordHasher.HashPassword(user, request.Password);
+                await _context.SaveChangesAsync();
+            }
+            else if (passwordVerification == PasswordVerificationResult.SuccessRehashNeeded)
+            {
+                user.Password = _passwordHasher.HashPassword(user, request.Password);
+                await _context.SaveChangesAsync();
             }
 
-            return Ok(user);
+            return Ok(SafeUser(user));
         }
 
         [HttpGet("{id}")]
-        public async Task<ActionResult<User>> GetUserById(int id)
+        public async Task<ActionResult<object>> GetUserById(int id)
         {
             var user = await _context.Users.FindAsync(id);
             if (user == null)
@@ -76,11 +118,11 @@ namespace SplitmateAPI.Controllers
                 return NotFound(new { message = $"Utilizatorul cu ID-ul {id} nu a fost găsit." });
             }
 
-            return Ok(user);
+            return Ok(SafeUser(user));
         }
 
         [HttpPut("{id}/profile")]
-        public async Task<ActionResult<User>> UpdateProfile(int id, UpdateUserProfileRequest request)
+        public async Task<ActionResult<object>> UpdateProfile(int id, UpdateUserProfileRequest request)
         {
             var user = await _context.Users.FindAsync(id);
             if (user == null)
@@ -100,11 +142,25 @@ namespace SplitmateAPI.Controllers
                 return BadRequest("Email-ul este deja folosit de alt utilizator.");
             }
 
+            if (await _context.Users.AnyAsync(u =>
+                u.Id != id &&
+                u.Username.ToLower() == request.Username.Trim().ToLower()))
+            {
+                return BadRequest("Username-ul este deja folosit de alt utilizator.");
+            }
+
             user.Username = request.Username.Trim();
             user.Email = request.Email.Trim();
 
-            await _context.SaveChangesAsync();
-            return Ok(user);
+            try
+            {
+                await _context.SaveChangesAsync();
+            }
+            catch (DbUpdateException)
+            {
+                return BadRequest("Email-ul sau username-ul este deja folosit.");
+            }
+            return Ok(SafeUser(user));
         }
 
         [HttpPut("{id}/password")]
@@ -121,7 +177,8 @@ namespace SplitmateAPI.Controllers
                 return BadRequest("Parola curentă și parola nouă sunt obligatorii.");
             }
 
-            if (user.Password != request.CurrentPassword)
+            var currentPasswordCheck = _passwordHasher.VerifyHashedPassword(user, user.Password, request.CurrentPassword);
+            if (currentPasswordCheck == PasswordVerificationResult.Failed && user.Password != request.CurrentPassword)
             {
                 return BadRequest("Parola curentă este incorectă.");
             }
@@ -131,7 +188,7 @@ namespace SplitmateAPI.Controllers
                 return BadRequest("Parola nouă trebuie să aibă minim 6 caractere.");
             }
 
-            user.Password = request.NewPassword;
+            user.Password = _passwordHasher.HashPassword(user, request.NewPassword);
             await _context.SaveChangesAsync();
             return Ok(new { message = "Parola a fost actualizată cu succes." });
         }

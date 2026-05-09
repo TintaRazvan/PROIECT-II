@@ -8,6 +8,8 @@ function Login() {
     const [form, setForm] = useState({ email: '', password: '' });
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
+    const [showPassword, setShowPassword] = useState(false);
+    const [rememberMe, setRememberMe] = useState(() => localStorage.getItem('splitmate_remember_me') === 'true');
 
     const handleChange = (e) => {
         setForm({ ...form, [e.target.name]: e.target.value });
@@ -17,18 +19,26 @@ function Login() {
         e.preventDefault();
         setError('');
 
-        if (!form.email || !form.password) {
+        if (!form.email.trim() || !form.password) {
             setError('Completează toate câmpurile.');
+            return;
+        }
+
+        const email = form.email.trim();
+        const simpleEmailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!simpleEmailRegex.test(email)) {
+            setError('Email invalid.');
             return;
         }
 
         setLoading(true);
         try {
             const user = await loginUser({
-                email: form.email,
+                email,
                 password: form.password,
             });
             localStorage.setItem('splitmate_user', JSON.stringify(user));
+            localStorage.setItem('splitmate_remember_me', String(rememberMe));
             navigate('/dashboard');
         } catch (err) {
             setError(err.message || 'Nu s-a putut autentifica.');
@@ -59,13 +69,29 @@ function Login() {
                     <label>
                         <span>Parolă</span>
                         <input
-                            type="password"
+                            type={showPassword ? 'text' : 'password'}
                             name="password"
                             value={form.password}
                             onChange={handleChange}
                             placeholder="parola ta"
                             autoComplete="current-password"
                         />
+                    </label>
+                    <label>
+                        <input
+                            type="checkbox"
+                            checked={showPassword}
+                            onChange={(e) => setShowPassword(e.target.checked)}
+                        />{' '}
+                        Afișează parola
+                    </label>
+                    <label>
+                        <input
+                            type="checkbox"
+                            checked={rememberMe}
+                            onChange={(e) => setRememberMe(e.target.checked)}
+                        />{' '}
+                        Ține-mă minte pe acest device
                     </label>
 
                     {error && <div className="login-error">{error}</div>}

@@ -70,8 +70,53 @@ Frontend-ul ruleaza pe:
 
 ## 5) Cum functioneaza impreuna
 
-- Frontend-ul este configurat sa apeleze API-ul la `http://localhost:7252/api`.
+- Frontend-ul foloseste `REACT_APP_API_BASE_URL` (fallback local: `http://localhost:7252/api`).
 - Trebuie sa rulezi **si backend-ul, si frontend-ul** in acelasi timp.
+
+## 6) Configurare Azure (echipa)
+
+### Backend (Azure App Service)
+
+Seteaza variabilele de mediu in App Service -> Configuration:
+
+- `ConnectionStrings__DefaultConnection` = connection string Azure SQL
+- `Cors__AllowedOrigins__0` = URL frontend productie (ex: `https://your-frontend.azurestaticapps.net`)
+- `Cors__AllowedOrigins__1` = URL frontend staging/dev (optional)
+
+API-ul expune endpoint de health check:
+
+- `https://<api-app>.azurewebsites.net/health`
+
+### Frontend (Azure Static Web Apps / App Service)
+
+Seteaza:
+
+- `REACT_APP_API_BASE_URL=https://<api-app>.azurewebsites.net/api`
+
+Pentru local, poti copia:
+
+```bash
+cd src/frontend
+copy .env.example .env.local
+```
+
+## 7) Migrari EF Core (obligatoriu in echipa)
+
+Inainte de `dotnet ef database update` pe DB shared:
+
+1. Ruleaza `database/Precheck_StabilizeConstraintsAndExpensePayer.sql`.
+2. Rezolva duplicatele de `Email`/`Username` daca exista.
+3. Ruleaza update:
+
+```bash
+cd src/Splitmate
+dotnet ef database update
+```
+
+Migrarea adauga:
+
+- coloana `PayerId` in `Expenses`
+- indexuri unice pe `Users.Email` si `Users.Username`
 
 ## Probleme frecvente
 
@@ -86,6 +131,9 @@ Frontend-ul ruleaza pe:
 
 - **Frontend-ul porneste, dar API-ul nu raspunde**  
   Verifica daca backend-ul ruleaza pe `http://localhost:7252`.
+
+- **API-ul nu porneste in Azure / local dupa ultimele modificari**  
+  Verifica daca ai setat `ConnectionStrings__DefaultConnection` (sau in `appsettings.Development.json` local).
 
 ## Comenzi rapide (rezumat)
 

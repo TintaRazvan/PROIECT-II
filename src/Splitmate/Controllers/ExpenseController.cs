@@ -31,6 +31,11 @@ namespace SplitmateAPI.Controllers
                 return BadRequest("Suma cheltuielii trebuie să fie pozitivă.");
             }
 
+            if (string.IsNullOrWhiteSpace(newExpense.Description))
+            {
+                return BadRequest("Descrierea cheltuielii este obligatorie.");
+            }
+
             if (newExpense.PayerId <= 0)
             {
                 return BadRequest("PayerId este obligatoriu.");
@@ -58,61 +63,62 @@ namespace SplitmateAPI.Controllers
                 }
             }
 
-            _context.Expenses.Add(newExpense);
-            await _context.SaveChangesAsync();
+            newExpense.Date = newExpense.Date == default ? DateTime.UtcNow : newExpense.Date;
 
-            // Auto-split: if expense belongs to a group, create debts for each member
-            if (newExpense.GroupId > 0 && newExpense.PayerId > 0)
+            var strategy = _context.Database.CreateExecutionStrategy();
+            try
             {
-                var members = await _context.GroupMembers
-                    .Where(gm => gm.GroupId == newExpense.GroupId)
-                    .Select(gm => gm.UserId)
-                    .ToListAsync();
-
-                if (!members.Contains(newExpense.PayerId))
+                await strategy.ExecuteAsync(async () =>
                 {
-                    return BadRequest("Plătitorul trebuie să fie membru în grup.");
-                }
-
-                var allMembers = members.Distinct().ToList();
-                var otherMembers = allMembers.Where(id => id != newExpense.PayerId).ToList();
-
-                if (otherMembers.Count > 0)
-                {
-                    // Split equally and preserve exact total by distributing remainder in cents.
-                    int totalPeople = allMembers.Count;
-                    var totalCents = (int)Math.Round(newExpense.Amount * 100m, MidpointRounding.AwayFromZero);
-                    var baseShareCents = totalCents / totalPeople;
-                    var remainder = totalCents % totalPeople;
-
-                    var sharesByMember = allMembers
-                        .OrderBy(id => id)
-                        .Select((memberId, index) => new
-                        {
-                            MemberId = memberId,
-                            ShareCents = baseShareCents + (index < remainder ? 1 : 0)
-                        })
-                        .ToDictionary(x => x.MemberId, x => x.ShareCents);
-
-                    foreach (var memberId in otherMembers)
-                    {
-                        var memberShareCents = sharesByMember[memberId];
-                        var memberShare = memberShareCents / 100m;
-
-                        var debt = new Debt
-                        {
-                            Amount = memberShare,
-                            FromUserId = memberId,    // membrul datorează
-                            ToUserId = newExpense.PayerId,  // celui care a plătit
-                            ExpenseId = newExpense.Id
-                        };
-                        _context.Debts.Add(debt);
-                    }
+                    await using var tx = await _context.Database.BeginTransactionAsync();
+                    _context.Expenses.Add(newExpense);
                     await _context.SaveChangesAsync();
-                }
+                    await RebuildExpenseDebts(newExpense);
+                    await _context.SaveChangesAsync();
+                    await tx.CommitAsync();
+                });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(ex.Message);
             }
 
             return Ok(newExpense);
+        }
+
+        [HttpPut("{id}")]
+        public async Task<ActionResult<Expense>> UpdateExpense(int id, [FromBody] UpdateExpenseRequest request)
+        {
+            var expense = await _context.Expenses.FindAsync(id);
+            if (expense == null)
+            {
+                return NotFound(new { message = $"Cheltuiala cu ID-ul {id} nu a fost găsită." });
+            }
+
+            if (!string.IsNullOrWhiteSpace(request.Description))
+            {
+                expense.Description = request.Description.Trim();
+            }
+
+            if (request.Amount.HasValue)
+            {
+                if (request.Amount.Value <= 0)
+                {
+                    return BadRequest("Suma cheltuielii trebuie să fie pozitivă.");
+                }
+                expense.Amount = request.Amount.Value;
+            }
+
+            try
+            {
+                await RebuildExpenseDebts(expense);
+                await _context.SaveChangesAsync();
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+            return Ok(expense);
         }
 
         [HttpDelete("{id}")]
@@ -132,6 +138,70 @@ namespace SplitmateAPI.Controllers
             _context.Expenses.Remove(expense);
             await _context.SaveChangesAsync();
             return Ok(new { message = "Cheltuiala a fost ștearsă cu succes.", deletedDebts = relatedDebts.Count });
+        }
+
+        public class UpdateExpenseRequest
+        {
+            public string? Description { get; set; }
+            public decimal? Amount { get; set; }
+        }
+
+        private async Task RebuildExpenseDebts(Expense expense)
+        {
+            var currentDebts = await _context.Debts
+                .Where(d => d.ExpenseId == expense.Id)
+                .ToListAsync();
+            if (currentDebts.Count > 0)
+            {
+                _context.Debts.RemoveRange(currentDebts);
+            }
+
+            if (expense.GroupId <= 0 || expense.PayerId <= 0)
+            {
+                return;
+            }
+
+            var members = await _context.GroupMembers
+                .Where(gm => gm.GroupId == expense.GroupId)
+                .Select(gm => gm.UserId)
+                .Distinct()
+                .ToListAsync();
+
+            if (!members.Contains(expense.PayerId))
+            {
+                throw new InvalidOperationException("Plătitorul trebuie să fie membru în grup.");
+            }
+
+            var otherMembers = members.Where(id => id != expense.PayerId).ToList();
+            if (otherMembers.Count == 0)
+            {
+                return;
+            }
+
+            var totalPeople = members.Count;
+            var totalCents = (int)Math.Round(expense.Amount * 100m, MidpointRounding.AwayFromZero);
+            var baseShareCents = totalCents / totalPeople;
+            var remainder = totalCents % totalPeople;
+
+            var sharesByMember = members
+                .OrderBy(id => id)
+                .Select((memberId, index) => new
+                {
+                    MemberId = memberId,
+                    ShareCents = baseShareCents + (index < remainder ? 1 : 0)
+                })
+                .ToDictionary(x => x.MemberId, x => x.ShareCents);
+
+            foreach (var memberId in otherMembers)
+            {
+                _context.Debts.Add(new Debt
+                {
+                    Amount = sharesByMember[memberId] / 100m,
+                    FromUserId = memberId,
+                    ToUserId = expense.PayerId,
+                    ExpenseId = expense.Id
+                });
+            }
         }
     }
 }

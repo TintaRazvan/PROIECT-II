@@ -5,9 +5,10 @@ import './Register.css';
 
 function Register() {
     const navigate = useNavigate();
-    const [form, setForm] = useState({ username: '', email: '', password: '' });
+    const [form, setForm] = useState({ username: '', email: '', password: '', confirmPassword: '' });
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
+    const [showPassword, setShowPassword] = useState(false);
 
     const handleChange = (e) => {
         setForm({ ...form, [e.target.name]: e.target.value });
@@ -17,8 +18,25 @@ function Register() {
         e.preventDefault();
         setError('');
 
-        if (!form.username || !form.email || !form.password) {
+        if (!form.username.trim() || !form.email.trim() || !form.password || !form.confirmPassword) {
             setError('Completează toate câmpurile.');
+            return;
+        }
+
+        if (form.password.length < 6) {
+            setError('Parola trebuie să aibă minim 6 caractere.');
+            return;
+        }
+
+        if (form.password !== form.confirmPassword) {
+            setError('Parolele nu coincid.');
+            return;
+        }
+
+        const email = form.email.trim();
+        const simpleEmailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!simpleEmailRegex.test(email)) {
+            setError('Email invalid.');
             return;
         }
 
@@ -26,8 +44,8 @@ function Register() {
         try {
             const user = await createUser({
                 id: 0,
-                username: form.username,
-                email: form.email,
+                username: form.username.trim(),
+                email,
                 password: form.password,
                 groups: [],
             });
@@ -74,13 +92,32 @@ function Register() {
                     <label>
                         <span>Parolă</span>
                         <input
-                            type="password"
+                            type={showPassword ? 'text' : 'password'}
                             name="password"
                             value={form.password}
                             onChange={handleChange}
                             placeholder="minim 6 caractere"
                             autoComplete="new-password"
                         />
+                    </label>
+                    <label>
+                        <span>Confirmă parola</span>
+                        <input
+                            type={showPassword ? 'text' : 'password'}
+                            name="confirmPassword"
+                            value={form.confirmPassword}
+                            onChange={handleChange}
+                            placeholder="repetă parola"
+                            autoComplete="new-password"
+                        />
+                    </label>
+                    <label>
+                        <input
+                            type="checkbox"
+                            checked={showPassword}
+                            onChange={(e) => setShowPassword(e.target.checked)}
+                        />{' '}
+                        Afișează parola
                     </label>
 
                     {error && <div className="register-error">{error}</div>}

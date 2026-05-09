@@ -1,13 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
-    getGroups, createGroup, getGroupMembers, addGroupMember, removeGroupMember,
-    getExpenses, addExpense, deleteExpense,
+    getGroups, createGroup, deleteGroup, getGroupMembers, addGroupMember, removeGroupMember,
+    getExpenses, addExpense, updateExpense, deleteExpense,
     getDebts, createDebt, deleteDebt, getDebtSummary, getDebtHistory,
     getFriendsByUser, addFriend, removeFriend,
     getUsers,
 } from '../api';
 import './Dashboard.css';
+
+const DASHBOARD_PREFS_KEY = 'splitmate_dashboard_prefs';
 
 function Dashboard() {
     const navigate = useNavigate();
@@ -19,8 +21,55 @@ function Dashboard() {
     const [allUsers, setAllUsers] = useState([]);
     const [debtSummary, setDebtSummary] = useState(null);
     const [transactionHistory, setTransactionHistory] = useState([]);
-    const [tab, setTab] = useState('expenses');
+    const [tab, setTab] = useState(() => {
+        try {
+            const savedPrefs = JSON.parse(localStorage.getItem(DASHBOARD_PREFS_KEY) || '{}');
+            return savedPrefs.tab || 'expenses';
+        } catch {
+            return 'expenses';
+        }
+    });
     const [apiOk, setApiOk] = useState(true);
+    const [loading, setLoading] = useState(true);
+    const [toast, setToast] = useState(null);
+    const [searchQuery, setSearchQuery] = useState(() => {
+        try {
+            const savedPrefs = JSON.parse(localStorage.getItem(DASHBOARD_PREFS_KEY) || '{}');
+            return savedPrefs.searchQuery || '';
+        } catch {
+            return '';
+        }
+    });
+    const [editingExpense, setEditingExpense] = useState(null);
+    const [expenseSort, setExpenseSort] = useState(() => {
+        try {
+            const savedPrefs = JSON.parse(localStorage.getItem(DASHBOARD_PREFS_KEY) || '{}');
+            return savedPrefs.expenseSort || 'date_desc';
+        } catch {
+            return 'date_desc';
+        }
+    });
+    const [onlyMyExpenses, setOnlyMyExpenses] = useState(() => {
+        try {
+            const savedPrefs = JSON.parse(localStorage.getItem(DASHBOARD_PREFS_KEY) || '{}');
+            return savedPrefs.onlyMyExpenses ?? true;
+        } catch {
+            return true;
+        }
+    });
+    const [onlyMyDebts, setOnlyMyDebts] = useState(() => {
+        try {
+            const savedPrefs = JSON.parse(localStorage.getItem(DASHBOARD_PREFS_KEY) || '{}');
+            return savedPrefs.onlyMyDebts ?? true;
+        } catch {
+            return true;
+        }
+    });
+
+    const showToast = useCallback((msg, type = 'success') => {
+        setToast({ msg, type });
+        setTimeout(() => setToast(null), 3000);
+    }, []);
 
     // Modals
     const [showExpenseForm, setShowExpenseForm] = useState(false);
@@ -35,16 +84,35 @@ function Dashboard() {
     // Group members
     const [expandedGroupId, setExpandedGroupId] = useState(null);
     const [groupMembers, setGroupMembers] = useState({});
-    const [addMemberUserId, setAddMemberUserId] = useState('');
-    const [groupExpenseForm, setGroupExpenseForm] = useState({ description: '', amount: '' });
+    const [addMemberByGroup, setAddMemberByGroup] = useState({});
+    const [groupExpenseByGroup, setGroupExpenseByGroup] = useState({});
 
     useEffect(() => {
         const saved = localStorage.getItem('splitmate_user');
+        let parsedUser = null;
         if (saved) {
-            setUser(JSON.parse(saved));
+            try {
+                parsedUser = JSON.parse(saved);
+                if (parsedUser?.id) {
+                    setUser(parsedUser);
+                }
+            } catch {
+                localStorage.removeItem('splitmate_user');
+            }
         }
-        loadData(JSON.parse(saved || 'null'));
+        loadData(parsedUser);
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+    useEffect(() => {
+        const dashboardPrefs = {
+            tab,
+            searchQuery,
+            expenseSort,
+            onlyMyExpenses,
+            onlyMyDebts,
+        };
+        localStorage.setItem(DASHBOARD_PREFS_KEY, JSON.stringify(dashboardPrefs));
+    }, [tab, searchQuery, expenseSort, onlyMyExpenses, onlyMyDebts]);
 
     // Load debt summary when user becomes available
     useEffect(() => {
@@ -54,24 +122,32 @@ function Dashboard() {
     }, [user]);
 
     async function loadData(currentUser = user) {
+        setLoading(true);
         try {
-            const [g, e, d, u] = await Promise.all([
+            const [g, e, d, u] = await Promise.allSettled([
                 getGroups(),
                 getExpenses(),
                 getDebts(),
                 getUsers(),
             ]);
-            const f = currentUser?.id ? await getFriendsByUser(currentUser.id) : [];
-            const h = currentUser?.id ? await getDebtHistory(currentUser.id) : [];
-            setGroups(g);
-            setExpenses(e);
-            setDebts(d);
-            setFriends(f);
-            setTransactionHistory(h);
-            setAllUsers(u);
-            setApiOk(true);
+
+            const [f, h] = currentUser?.id
+                ? await Promise.allSettled([getFriendsByUser(currentUser.id), getDebtHistory(currentUser.id)])
+                : [{ status: 'fulfilled', value: [] }, { status: 'fulfilled', value: [] }];
+
+            if (g.status === 'fulfilled') setGroups(g.value);
+            if (e.status === 'fulfilled') setExpenses(e.value);
+            if (d.status === 'fulfilled') setDebts(d.value);
+            if (u.status === 'fulfilled') setAllUsers(u.value);
+            if (f.status === 'fulfilled') setFriends(f.value);
+            if (h.status === 'fulfilled') setTransactionHistory(h.value);
+
+            const hasAnySuccess = [g, e, d, u, f, h].some(result => result.status === 'fulfilled');
+            setApiOk(hasAnySuccess);
         } catch {
             setApiOk(false);
+        } finally {
+            setLoading(false);
         }
     }
 
@@ -101,12 +177,14 @@ function Dashboard() {
             setExpenseForm({ description: '', amount: '', groupId: 0 });
             setShowExpenseForm(false);
             loadData(user);
-        } catch {
-            alert('Eroare la adăugarea cheltuielii. Verifică API-ul.');
+            showToast('Cheltuială adăugată cu succes!');
+        } catch (err) {
+            showToast(err.message || 'Eroare la adăugarea cheltuielii.', 'error');
         }
     };
 
     const handleAddGroupExpense = async (groupId) => {
+        const groupExpenseForm = groupExpenseByGroup[groupId] || { description: '', amount: '' };
         if (!groupExpenseForm.description || !groupExpenseForm.amount) return;
         try {
             await addExpense({
@@ -119,10 +197,11 @@ function Dashboard() {
                 groupId: groupId,
                 group: null,
             });
-            setGroupExpenseForm({ description: '', amount: '' });
+            setGroupExpenseByGroup(prev => ({ ...prev, [groupId]: { description: '', amount: '' } }));
             loadData(user);
+            showToast('Cheltuială de grup adăugată!');
         } catch (err) {
-            alert('Eroare la adăugarea cheltuielii în grup: ' + (err.message || 'Verifică API-ul.'));
+            showToast(err.message || 'Eroare la adăugarea cheltuielii în grup.', 'error');
         }
     };
 
@@ -131,9 +210,39 @@ function Dashboard() {
         try {
             await deleteExpense(id);
             loadData(user);
+            showToast('Cheltuială ștearsă.');
         } catch {
-            alert('Eroare la ștergerea cheltuielii.');
+            showToast('Eroare la ștergerea cheltuielii.', 'error');
         }
+    };
+
+    const handleEditExpense = async (id, data) => {
+        try {
+            setEditingExpense(id);
+            await updateExpense(id, data);
+            loadData(user);
+            showToast('Cheltuială actualizată!');
+        } catch (err) {
+            showToast(err.message || 'Eroare la editare.', 'error');
+        } finally {
+            setEditingExpense(null);
+        }
+    };
+
+    const handleStartEditExpense = async (exp) => {
+        const description = window.prompt('Descriere nouă:', exp.description);
+        if (description === null) return;
+
+        const amountRaw = window.prompt('Sumă nouă (RON):', String(exp.amount));
+        if (amountRaw === null) return;
+
+        const amount = parseFloat(amountRaw);
+        if (!description.trim() || Number.isNaN(amount) || amount <= 0) {
+            showToast('Descrierea și suma trebuie să fie valide.', 'error');
+            return;
+        }
+
+        await handleEditExpense(exp.id, { description: description.trim(), amount });
     };
 
     const handleAddGroup = async (e) => {
@@ -141,16 +250,27 @@ function Dashboard() {
         if (!groupForm.username) return;
         try {
             await createGroup({
-                id: 0,
-                username: groupForm.username,
-                members: [],
-                expenses: [],
+                groupName: groupForm.username,
+                ownerUserId: user?.id || 0,
             });
             setGroupForm({ username: '' });
             setShowGroupForm(false);
             loadData(user);
+            showToast('Grup creat cu succes!');
+        } catch (err) {
+            showToast(err.message || 'Eroare la crearea grupului.', 'error');
+        }
+    };
+
+    const handleDeleteGroup = async (id) => {
+        if (!window.confirm('Sigur vrei să ștergi acest grup? Se vor șterge și cheltuielile asociate.')) return;
+        try {
+            await deleteGroup(id);
+            setExpandedGroupId(null);
+            loadData(user);
+            showToast('Grup șters cu succes.');
         } catch {
-            alert('Eroare la crearea grupului. Verifică API-ul.');
+            showToast('Eroare la ștergerea grupului.', 'error');
         }
     };
 
@@ -169,15 +289,16 @@ function Dashboard() {
     };
 
     const handleAddMember = async (groupId) => {
+        const addMemberUserId = addMemberByGroup[groupId] || '';
         if (!addMemberUserId) return;
         try {
             await addGroupMember(groupId, parseInt(addMemberUserId));
-            setAddMemberUserId('');
+            setAddMemberByGroup(prev => ({ ...prev, [groupId]: '' }));
             const members = await getGroupMembers(groupId);
             setGroupMembers((prev) => ({ ...prev, [groupId]: members }));
             loadData(user);
         } catch (err) {
-            alert(err.message || 'Eroare la adăugarea membrului.');
+            showToast(err.message || 'Eroare la adăugarea membrului.', 'error');
         }
     };
 
@@ -189,7 +310,7 @@ function Dashboard() {
             setGroupMembers((prev) => ({ ...prev, [groupId]: members }));
             loadData(user);
         } catch {
-            alert('Eroare la eliminarea membrului.');
+            showToast('Eroare la eliminarea membrului.', 'error');
         }
     };
 
@@ -210,8 +331,21 @@ function Dashboard() {
             setShowDebtForm(false);
             loadData(user);
             if (user?.id) loadDebtSummary(user.id);
+            showToast('Datorie adăugată!');
         } catch {
-            alert('Eroare la crearea datoriei. Verifică API-ul.');
+            showToast('Eroare la crearea datoriei.', 'error');
+        }
+    };
+
+    const handleSettleDebt = async (id) => {
+        if (!window.confirm('Marchezi această datorie ca plătită?')) return;
+        try {
+            await deleteDebt(id);
+            loadData(user);
+            if (user?.id) loadDebtSummary(user.id);
+            showToast('Datorie decontată! ✓');
+        } catch {
+            showToast('Eroare la decontare.', 'error');
         }
     };
 
@@ -221,8 +355,9 @@ function Dashboard() {
             await deleteDebt(id);
             loadData(user);
             if (user?.id) loadDebtSummary(user.id);
+            showToast('Datorie ștearsă.');
         } catch {
-            alert('Eroare la ștergerea datoriei.');
+            showToast('Eroare la ștergerea datoriei.', 'error');
         }
     };
 
@@ -239,8 +374,9 @@ function Dashboard() {
             setFriendForm({ friendId: '' });
             setShowFriendForm(false);
             loadData(user);
+            showToast('Prieten adăugat!');
         } catch {
-            alert('Eroare la adăugarea prietenului. Verifică API-ul.');
+            showToast('Eroare la adăugarea prietenului.', 'error');
         }
     };
 
@@ -250,8 +386,9 @@ function Dashboard() {
         try {
             await removeFriend(user.id, friendId);
             loadData(user);
+            showToast('Prieten eliminat.');
         } catch {
-            alert('Eroare la ștergerea prietenului.');
+            showToast('Eroare la ștergerea prietenului.', 'error');
         }
     };
 
@@ -265,6 +402,25 @@ function Dashboard() {
         const g = groups.find(g => g.id === groupId);
         return g ? (g.groupName || g.username) : null;
     };
+
+    const normalizedSearch = searchQuery.trim().toLowerCase();
+    const filteredExpenses = expenses
+        .filter(exp => !onlyMyExpenses || exp.payerId === user?.id)
+        .filter(exp =>
+            !normalizedSearch
+            || exp.description.toLowerCase().includes(normalizedSearch)
+            || (getGroupName(exp.groupId) || '').toLowerCase().includes(normalizedSearch))
+        .sort((a, b) => {
+            if (expenseSort === 'amount_desc') return b.amount - a.amount;
+            if (expenseSort === 'amount_asc') return a.amount - b.amount;
+            return new Date(b.date) - new Date(a.date);
+        });
+
+    const filteredDebts = debts
+        .filter(d => !onlyMyDebts || d.fromUserId === user?.id || d.toUserId === user?.id)
+        .filter(d => !normalizedSearch
+            || getUserName(d.fromUserId).toLowerCase().includes(normalizedSearch)
+            || getUserName(d.toUserId).toLowerCase().includes(normalizedSearch));
 
     const logout = () => {
         localStorage.removeItem('splitmate_user');
@@ -329,6 +485,11 @@ function Dashboard() {
                 {!apiOk && (
                     <div className="dash-warning">
                         API-ul nu răspunde. Pornește backend-ul pe <code>localhost:7252</code>.
+                    </div>
+                )}
+                {toast && (
+                    <div className={`dash-warning ${toast.type === 'error' ? '' : 'dash-warning--ok'}`}>
+                        {toast.msg}
                     </div>
                 )}
 
@@ -538,13 +699,45 @@ function Dashboard() {
                     </button>
                 </div>
 
+                <div className="dash-actions" style={{ marginTop: 8 }}>
+                    <input
+                        type="text"
+                        className="dash-form-select"
+                        placeholder="Caută după nume, descriere, grup..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                    />
+                    {tab === 'expenses' && (
+                        <>
+                            <button className="dash-action-btn" onClick={() => setOnlyMyExpenses(v => !v)}>
+                                {onlyMyExpenses ? 'Afișează toate cheltuielile' : 'Doar cheltuielile mele'}
+                            </button>
+                            <select
+                                className="dash-form-select"
+                                value={expenseSort}
+                                onChange={(e) => setExpenseSort(e.target.value)}
+                            >
+                                <option value="date_desc">Sortare: cele mai noi</option>
+                                <option value="amount_desc">Sortare: sumă descrescător</option>
+                                <option value="amount_asc">Sortare: sumă crescător</option>
+                            </select>
+                        </>
+                    )}
+                    {tab === 'debts' && (
+                        <button className="dash-action-btn" onClick={() => setOnlyMyDebts(v => !v)}>
+                            {onlyMyDebts ? 'Afișează toate datoriile' : 'Doar datoriile mele'}
+                        </button>
+                    )}
+                </div>
+
                 {/* Tab content */}
                 <div className="dash-content">
+                    {loading && <p className="dash-empty">Se încarcă datele...</p>}
                     {tab === 'expenses' && (
-                        expenses.length === 0
+                        filteredExpenses.length === 0
                             ? <p className="dash-empty">Nicio cheltuială încă. Adaugă una!</p>
                             : <div className="dash-list">
-                                {expenses.map((exp) => (
+                                {filteredExpenses.map((exp) => (
                                     <div className="dash-list-item" key={exp.id}>
                                         <div>
                                             <span className="dash-list-title">{exp.description}</span>
@@ -557,6 +750,14 @@ function Dashboard() {
                                         </div>
                                         <div className="dash-list-right">
                                             <span className="dash-list-amount">{exp.amount} RON</span>
+                                            <button
+                                                className="dash-action-btn"
+                                                onClick={() => handleStartEditExpense(exp)}
+                                                disabled={editingExpense === exp.id}
+                                                title="Editează cheltuiala"
+                                            >
+                                                Edit
+                                            </button>
                                             <button
                                                 className="dash-delete-btn"
                                                 onClick={() => handleDeleteExpense(exp.id)}
@@ -583,7 +784,19 @@ function Dashboard() {
                                                     {groupMembers[g.id]?.length || 0} membri
                                                 </span>
                                             </div>
-                                            <span className={`dash-group-arrow ${expandedGroupId === g.id ? 'dash-group-arrow--open' : ''}`}>▸</span>
+                                            <div className="dash-list-right">
+                                                <button
+                                                    className="dash-delete-btn"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleDeleteGroup(g.id);
+                                                    }}
+                                                    title="Șterge grupul"
+                                                >
+                                                    ✕
+                                                </button>
+                                                <span className={`dash-group-arrow ${expandedGroupId === g.id ? 'dash-group-arrow--open' : ''}`}>▸</span>
+                                            </div>
                                         </div>
 
                                         {expandedGroupId === g.id && (
@@ -614,8 +827,8 @@ function Dashboard() {
                                                 <div className="dash-group-add">
                                                     <select
                                                         className="dash-form-select"
-                                                        value={addMemberUserId}
-                                                        onChange={(e) => setAddMemberUserId(e.target.value)}
+                                                        value={addMemberByGroup[g.id] || ''}
+                                                        onChange={(e) => setAddMemberByGroup(prev => ({ ...prev, [g.id]: e.target.value }))}
                                                     >
                                                         <option value="">— Alege utilizator —</option>
                                                         {allUsers
@@ -627,7 +840,7 @@ function Dashboard() {
                                                     <button
                                                         className="dash-action-btn dash-action-btn--primary dash-group-add-btn"
                                                         onClick={() => handleAddMember(g.id)}
-                                                        disabled={!addMemberUserId}
+                                                        disabled={!(addMemberByGroup[g.id] || '')}
                                                     >+ Adaugă</button>
                                                 </div>
 
@@ -667,19 +880,25 @@ function Dashboard() {
                                                         <input
                                                             type="text"
                                                             placeholder="Descriere cheltuială"
-                                                            value={groupExpenseForm.description}
-                                                            onChange={(e) => setGroupExpenseForm({ ...groupExpenseForm, description: e.target.value })}
+                                                            value={groupExpenseByGroup[g.id]?.description || ''}
+                                                            onChange={(e) => setGroupExpenseByGroup(prev => ({
+                                                                ...prev,
+                                                                [g.id]: { ...(prev[g.id] || { description: '', amount: '' }), description: e.target.value }
+                                                            }))}
                                                         />
                                                         <input
                                                             type="number"
                                                             placeholder="Sumă"
-                                                            value={groupExpenseForm.amount}
-                                                            onChange={(e) => setGroupExpenseForm({ ...groupExpenseForm, amount: e.target.value })}
+                                                            value={groupExpenseByGroup[g.id]?.amount || ''}
+                                                            onChange={(e) => setGroupExpenseByGroup(prev => ({
+                                                                ...prev,
+                                                                [g.id]: { ...(prev[g.id] || { description: '', amount: '' }), amount: e.target.value }
+                                                            }))}
                                                         />
                                                         <button
                                                             className="dash-action-btn dash-action-btn--primary dash-group-add-btn"
                                                             onClick={() => handleAddGroupExpense(g.id)}
-                                                            disabled={!groupExpenseForm.description || !groupExpenseForm.amount}
+                                                            disabled={!(groupExpenseByGroup[g.id]?.description && groupExpenseByGroup[g.id]?.amount)}
                                                         >+ Adaugă</button>
                                                     </div>
                                                 </div>
@@ -691,10 +910,10 @@ function Dashboard() {
                     )}
 
                     {tab === 'debts' && (
-                        debts.length === 0
+                        filteredDebts.length === 0
                             ? <p className="dash-empty">Nicio datorie. Ești la zero!</p>
                             : <div className="dash-list">
-                                {debts.map((d) => (
+                                {filteredDebts.map((d) => (
                                     <div className="dash-list-item" key={d.id}>
                                         <div>
                                             <span className="dash-list-title">
@@ -708,6 +927,15 @@ function Dashboard() {
                                             <span className={`dash-list-amount ${d.fromUserId === user?.id ? 'dash-list-amount--negative' : ''}`}>
                                                 {d.fromUserId === user?.id ? '-' : '+'}{d.amount} RON
                                             </span>
+                                            {(d.fromUserId === user?.id || d.toUserId === user?.id) && (
+                                                <button
+                                                    className="dash-action-btn"
+                                                    onClick={() => handleSettleDebt(d.id)}
+                                                    title="Marchează ca decontată"
+                                                >
+                                                    Decontează
+                                                </button>
+                                            )}
                                             <button
                                                 className="dash-delete-btn"
                                                 onClick={() => handleDeleteDebt(d.id)}

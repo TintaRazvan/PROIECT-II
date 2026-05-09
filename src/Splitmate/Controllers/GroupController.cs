@@ -32,34 +32,46 @@ namespace SplitmateAPI.Controllers
                 return BadRequest("Numele grupului este obligatoriu.");
             }
 
-            var newGroup = new Group
+            Group? newGroup = null;
+            var strategy = _context.Database.CreateExecutionStrategy();
+
+            try
             {
-                GroupName = groupName
-            };
-
-            _context.Groups.Add(newGroup);
-            await _context.SaveChangesAsync();
-
-            if (request.OwnerUserId.HasValue && request.OwnerUserId.Value > 0)
-            {
-                var ownerExists = await _context.Users.AnyAsync(u => u.Id == request.OwnerUserId.Value);
-                if (!ownerExists)
+                await strategy.ExecuteAsync(async () =>
                 {
-                    return BadRequest("Utilizatorul owner nu există.");
-                }
+                    await using var tx = await _context.Database.BeginTransactionAsync();
 
-                var ownerAlreadyInGroup = await _context.GroupMembers.AnyAsync(gm =>
-                    gm.GroupId == newGroup.Id && gm.UserId == request.OwnerUserId.Value);
-
-                if (!ownerAlreadyInGroup)
-                {
-                    _context.GroupMembers.Add(new GroupMember
-                    {
-                        GroupId = newGroup.Id,
-                        UserId = request.OwnerUserId.Value
-                    });
+                    newGroup = new Group { GroupName = groupName };
+                    _context.Groups.Add(newGroup);
                     await _context.SaveChangesAsync();
-                }
+
+                    if (request.OwnerUserId.HasValue && request.OwnerUserId.Value > 0)
+                    {
+                        var ownerExists = await _context.Users.AnyAsync(u => u.Id == request.OwnerUserId.Value);
+                        if (!ownerExists)
+                        {
+                            throw new InvalidOperationException("Utilizatorul owner nu există.");
+                        }
+
+                        _context.GroupMembers.Add(new GroupMember
+                        {
+                            GroupId = newGroup.Id,
+                            UserId = request.OwnerUserId.Value
+                        });
+                        await _context.SaveChangesAsync();
+                    }
+
+                    await tx.CommitAsync();
+                });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+
+            if (newGroup == null)
+            {
+                return StatusCode(500, "Nu s-a putut crea grupul.");
             }
 
             return Ok(newGroup);
@@ -115,6 +127,46 @@ namespace SplitmateAPI.Controllers
             _context.GroupMembers.Remove(link);
             await _context.SaveChangesAsync();
             return Ok(new { message = "Membru eliminat." });
+        }
+
+        // DELETE api/Group/{id}
+        [HttpDelete("{id}")]
+        public async Task<ActionResult> DeleteGroup(int id)
+        {
+            var group = await _context.Groups.FindAsync(id);
+            if (group == null) return NotFound("Grupul nu există.");
+
+            // Remove related debts from group expenses
+            var groupExpenseIds = await _context.Expenses
+                .Where(e => e.GroupId == id)
+                .Select(e => e.Id)
+                .ToListAsync();
+
+            if (groupExpenseIds.Count > 0)
+            {
+                var relatedDebts = await _context.Debts
+                    .Where(d => groupExpenseIds.Contains(d.ExpenseId))
+                    .ToListAsync();
+                _context.Debts.RemoveRange(relatedDebts);
+            }
+
+            // Remove group expenses
+            var groupExpenses = await _context.Expenses
+                .Where(e => e.GroupId == id)
+                .ToListAsync();
+            _context.Expenses.RemoveRange(groupExpenses);
+
+            // Remove group members
+            var members = await _context.GroupMembers
+                .Where(gm => gm.GroupId == id)
+                .ToListAsync();
+            _context.GroupMembers.RemoveRange(members);
+
+            // Remove the group itself
+            _context.Groups.Remove(group);
+            await _context.SaveChangesAsync();
+
+            return Ok(new { message = "Grupul a fost șters cu succes." });
         }
 
         public class AddMemberRequest

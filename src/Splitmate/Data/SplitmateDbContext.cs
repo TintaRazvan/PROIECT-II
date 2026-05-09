@@ -61,12 +61,21 @@ namespace SplitmateAPI.Data
                 .Property(g => g.GroupName)
                 .HasColumnName("groupName");
 
+            modelBuilder.Entity<User>()
+                .HasIndex(u => u.Email)
+                .IsUnique();
+
+            modelBuilder.Entity<User>()
+                .HasIndex(u => u.Username)
+                .IsUnique();
+
             modelBuilder.Entity<Debt>()
                 .Ignore(d => d.FromUser)
                 .Ignore(d => d.ToUser);
 
+            // Keep navigation properties ignored (no FK relationships configured),
+            // but PayerId and GroupId are scalar columns that MUST be persisted.
             modelBuilder.Entity<Expense>()
-                .Ignore(e => e.PayerId)
                 .Ignore(e => e.Payer)
                 .Ignore(e => e.Group);
 

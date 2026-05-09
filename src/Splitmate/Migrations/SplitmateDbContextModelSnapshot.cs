@@ -70,6 +70,9 @@ namespace SplitmateAPI.Migrations
                     b.Property<int>("GroupId")
                         .HasColumnType("int");
 
+                    b.Property<int>("PayerId")
+                        .HasColumnType("int");
+
                     b.HasKey("Id");
 
                     b.ToTable("Expenses");
@@ -133,7 +136,7 @@ namespace SplitmateAPI.Migrations
 
                     b.Property<string>("Email")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasColumnType("nvarchar(450)");
 
                     b.Property<string>("Password")
                         .IsRequired()
@@ -141,9 +144,15 @@ namespace SplitmateAPI.Migrations
 
                     b.Property<string>("Username")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasColumnType("nvarchar(450)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("Email")
+                        .IsUnique();
+
+                    b.HasIndex("Username")
+                        .IsUnique();
 
                     b.ToTable("Users");
                 });
