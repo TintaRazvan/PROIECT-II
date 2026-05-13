@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
     getGroups, createGroup, deleteGroup, getGroupMembers, addGroupMember, removeGroupMember,
-    getExpenses, addExpense, updateExpense, deleteExpense,
+    getExpenses, addExpense, scanReceipt, addItemizedReceipt, updateExpense, deleteExpense,
     getDebts, createDebt, deleteDebt, getDebtSummary, getDebtHistory,
     getFriendsByUser, addFriend, removeFriend,
     getUsers,
@@ -10,9 +10,13 @@ import {
 import './Dashboard.css';
 
 const DASHBOARD_PREFS_KEY = 'splitmate_dashboard_prefs';
+const MAX_RECEIPT_IMAGE_SIZE = 10 * 1024 * 1024;
+const RECEIPT_IMAGE_ACCEPT = 'image/png,image/jpeg,image/bmp,image/tiff,.tif,.tiff';
+const RECEIPT_IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'bmp', 'tif', 'tiff'];
 
 function Dashboard() {
     const navigate = useNavigate();
+    const receiptInputRef = useRef(null);
     const [user, setUser] = useState(null);
     const [groups, setGroups] = useState([]);
     const [expenses, setExpenses] = useState([]);
@@ -77,6 +81,10 @@ function Dashboard() {
     const [showDebtForm, setShowDebtForm] = useState(false);
     const [showFriendForm, setShowFriendForm] = useState(false);
     const [expenseForm, setExpenseForm] = useState({ description: '', amount: '', groupId: 0 });
+    const [receiptScan, setReceiptScan] = useState({ loading: false, fileName: '', rawText: '', error: '' });
+    const [receiptPreviewUrl, setReceiptPreviewUrl] = useState('');
+    const [receiptItems, setReceiptItems] = useState([]);
+    const [savingItemizedReceipt, setSavingItemizedReceipt] = useState(false);
     const [groupForm, setGroupForm] = useState({ username: '' });
     const [debtForm, setDebtForm] = useState({ toUserId: '', amount: '', expenseId: 0 });
     const [friendForm, setFriendForm] = useState({ friendId: '' });
@@ -113,6 +121,14 @@ function Dashboard() {
         };
         localStorage.setItem(DASHBOARD_PREFS_KEY, JSON.stringify(dashboardPrefs));
     }, [tab, searchQuery, expenseSort, onlyMyExpenses, onlyMyDebts]);
+
+    useEffect(() => {
+        return () => {
+            if (receiptPreviewUrl) {
+                URL.revokeObjectURL(receiptPreviewUrl);
+            }
+        };
+    }, [receiptPreviewUrl]);
 
     // Load debt summary when user becomes available
     useEffect(() => {
@@ -160,6 +176,221 @@ function Dashboard() {
         }
     }
 
+    const resetReceiptScan = () => {
+        setReceiptScan({ loading: false, fileName: '', rawText: '', error: '' });
+        setReceiptPreviewUrl('');
+        setReceiptItems([]);
+    };
+
+    const openReceiptPicker = () => {
+        setShowExpenseForm(true);
+        window.setTimeout(() => receiptInputRef.current?.click(), 0);
+    };
+
+    const normalizeReceiptAmount = (amount) => {
+        const value = Number.parseFloat(String(amount || '').replace(',', '.'));
+        return Number.isFinite(value) && value > 0 ? value.toFixed(2) : '';
+    };
+
+    const buildReceiptDescription = (fileName) => {
+        const name = fileName.replace(/\.[^/.]+$/, '').replace(/[-_]+/g, ' ').trim();
+        return name ? `Bon - ${name}` : 'Bon scanat';
+    };
+
+    const createReceiptItem = (item = {}) => ({
+        localId: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        description: item.description || '',
+        amount: normalizeReceiptAmount(item.amount),
+        consumerUserIds: item.consumerUserIds || [],
+    });
+
+    const normalizeReceiptItems = (items = []) => {
+        return items
+            .map(item => createReceiptItem(item))
+            .filter(item => item.description.trim() && item.amount);
+    };
+
+    const isSupportedReceiptImage = (file) => {
+        const extension = file.name.split('.').pop()?.toLowerCase();
+        const hasSupportedExtension = RECEIPT_IMAGE_EXTENSIONS.includes(extension);
+        const hasImageType = !file.type || file.type.startsWith('image/');
+        return hasSupportedExtension && hasImageType;
+    };
+
+    const ensureGroupMembersLoaded = async (groupId) => {
+        const numericGroupId = parseInt(groupId) || 0;
+        if (!numericGroupId) return [];
+
+        if (groupMembers[numericGroupId]) {
+            return groupMembers[numericGroupId];
+        }
+
+        try {
+            const members = await getGroupMembers(numericGroupId);
+            setGroupMembers(prev => ({ ...prev, [numericGroupId]: members }));
+            return members;
+        } catch {
+            setGroupMembers(prev => ({ ...prev, [numericGroupId]: [] }));
+            return [];
+        }
+    };
+
+    const handleExpenseGroupChange = async (groupId) => {
+        setExpenseForm(prev => ({ ...prev, groupId }));
+        if (receiptItems.length > 0 || receiptScan.rawText) {
+            await ensureGroupMembersLoaded(groupId);
+        }
+    };
+
+    const updateReceiptItem = (localId, patch) => {
+        setReceiptItems(prev => prev.map(item =>
+            item.localId === localId ? { ...item, ...patch } : item
+        ));
+    };
+
+    const toggleReceiptConsumer = (localId, userId) => {
+        setReceiptItems(prev => prev.map(item => {
+            if (item.localId !== localId) return item;
+
+            const isSelected = item.consumerUserIds.includes(userId);
+            return {
+                ...item,
+                consumerUserIds: isSelected
+                    ? item.consumerUserIds.filter(id => id !== userId)
+                    : [...item.consumerUserIds, userId],
+            };
+        }));
+    };
+
+    const addManualReceiptItem = () => {
+        setReceiptItems(prev => [...prev, createReceiptItem({ description: 'Produs', amount: '' })]);
+    };
+
+    const removeReceiptItem = (localId) => {
+        setReceiptItems(prev => prev.filter(item => item.localId !== localId));
+    };
+
+    const handleSaveItemizedReceipt = async () => {
+        const groupId = parseInt(expenseForm.groupId) || 0;
+        if (!groupId) {
+            showToast('Alege un grup pentru bonul itemizat.', 'error');
+            return;
+        }
+
+        const members = await ensureGroupMembersLoaded(groupId);
+        if (members.length === 0) {
+            showToast('Grupul nu are membri disponibili pentru impartire.', 'error');
+            return;
+        }
+
+        const validItems = receiptItems
+            .map(item => ({
+                ...item,
+                description: item.description.trim(),
+                amount: normalizeReceiptAmount(item.amount),
+                consumerUserIds: item.consumerUserIds,
+            }))
+            .filter(item => item.description && item.amount);
+
+        if (validItems.length === 0) {
+            showToast('Adauga cel putin un produs valid din bon.', 'error');
+            return;
+        }
+
+        const firstUnassigned = validItems.find(item => item.consumerUserIds.length === 0);
+        if (firstUnassigned) {
+            showToast(`Selecteaza cine a consumat: ${firstUnassigned.description}.`, 'error');
+            return;
+        }
+
+        setSavingItemizedReceipt(true);
+        try {
+            await addItemizedReceipt({
+                payerId: user?.id || 0,
+                groupId,
+                date: new Date().toISOString(),
+                items: validItems.map(item => ({
+                    description: item.description,
+                    amount: parseFloat(item.amount),
+                    consumerUserIds: item.consumerUserIds,
+                })),
+            });
+
+            setExpenseForm({ description: '', amount: '', groupId: 0 });
+            resetReceiptScan();
+            setShowExpenseForm(false);
+            await loadData(user);
+            if (user?.id) await loadDebtSummary(user.id);
+            showToast('Bon itemizat salvat. Datoriile au fost calculate pe produse.');
+        } catch (err) {
+            showToast(err.message || 'Eroare la salvarea bonului itemizat.', 'error');
+        } finally {
+            setSavingItemizedReceipt(false);
+        }
+    };
+
+    const handleReceiptFileChange = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        if (!isSupportedReceiptImage(file)) {
+            showToast('Alege un bon in format JPG, PNG, BMP sau TIFF.', 'error');
+            e.target.value = '';
+            return;
+        }
+
+        if (file.size > MAX_RECEIPT_IMAGE_SIZE) {
+            showToast('Imaginea bonului trebuie sa aiba cel mult 10 MB.', 'error');
+            e.target.value = '';
+            return;
+        }
+
+        setShowExpenseForm(true);
+        setReceiptPreviewUrl(URL.createObjectURL(file));
+        setReceiptScan({ loading: true, fileName: file.name, rawText: '', error: '' });
+
+        try {
+            const result = await scanReceipt(file);
+            const detectedAmount = normalizeReceiptAmount(result?.amount);
+            const detectedItems = normalizeReceiptItems(result?.items || []);
+            setReceiptItems(detectedItems);
+
+            setExpenseForm(prev => ({
+                ...prev,
+                amount: detectedAmount || prev.amount,
+                description: prev.description.trim() ? prev.description : buildReceiptDescription(file.name),
+            }));
+
+            setReceiptScan({
+                loading: false,
+                fileName: file.name,
+                rawText: result?.rawText || '',
+                error: detectedAmount ? '' : 'Bonul a fost citit, dar suma nu a putut fi detectata automat.',
+            });
+
+            if (parseInt(expenseForm.groupId) > 0) {
+                await ensureGroupMembersLoaded(expenseForm.groupId);
+            }
+
+            if (detectedAmount) {
+                const itemText = detectedItems.length === 1 ? '1 produs detectat' : `${detectedItems.length} produse detectate`;
+                showToast(`${itemText}. Total: ${detectedAmount} RON.`);
+            } else {
+                showToast('Bon scanat. Completeaza manual suma inainte de salvare.', 'error');
+            }
+        } catch (err) {
+            setReceiptScan({
+                loading: false,
+                fileName: file.name,
+                rawText: '',
+                error: err.message || 'Scanarea bonului a esuat.',
+            });
+            showToast(err.message || 'Eroare la scanarea bonului.', 'error');
+        } finally {
+            e.target.value = '';
+        }
+    };
+
     const handleAddExpense = async (e) => {
         e.preventDefault();
         if (!expenseForm.description || !expenseForm.amount) return;
@@ -175,6 +406,7 @@ function Dashboard() {
                 group: null,
             });
             setExpenseForm({ description: '', amount: '', groupId: 0 });
+            resetReceiptScan();
             setShowExpenseForm(false);
             loadData(user);
             showToast('Cheltuială adăugată cu succes!');
@@ -422,6 +654,14 @@ function Dashboard() {
             || getUserName(d.fromUserId).toLowerCase().includes(normalizedSearch)
             || getUserName(d.toUserId).toLowerCase().includes(normalizedSearch));
 
+    const expenseGroupId = parseInt(expenseForm.groupId) || 0;
+    const receiptGroupMembers = expenseGroupId ? (groupMembers[expenseGroupId] || []) : [];
+    const receiptItemsTotal = receiptItems
+        .reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0)
+        .toFixed(2);
+    const receiptReadyToAssign = Boolean(receiptScan.rawText || receiptItems.length > 0);
+    const receiptHasUnassignedItems = receiptItems.some(item => item.consumerUserIds.length === 0);
+
     const logout = () => {
         localStorage.removeItem('splitmate_user');
         navigate('/');
@@ -549,8 +789,23 @@ function Dashboard() {
 
                 {/* Actions */}
                 <div className="dash-actions">
+                    <input
+                        ref={receiptInputRef}
+                        type="file"
+                        accept={RECEIPT_IMAGE_ACCEPT}
+                        className="dash-file-input"
+                        onChange={handleReceiptFileChange}
+                    />
                     <button onClick={() => setShowExpenseForm(true)} className="dash-action-btn dash-action-btn--primary">
                         + Cheltuială nouă
+                    </button>
+                    <button
+                        type="button"
+                        onClick={openReceiptPicker}
+                        className="dash-action-btn dash-action-btn--scan"
+                        disabled={receiptScan.loading}
+                    >
+                        {receiptScan.loading ? 'Se scaneaza...' : 'Scaneaza bon'}
                     </button>
                     <button onClick={() => setShowGroupForm(true)} className="dash-action-btn">
                         + Grup nou
@@ -567,6 +822,41 @@ function Dashboard() {
                 {showExpenseForm && (
                     <form onSubmit={handleAddExpense} className="dash-form">
                         <h3>Adaugă cheltuială</h3>
+                        <div className="dash-receipt">
+                            <button
+                                type="button"
+                                className="dash-receipt-upload"
+                                onClick={openReceiptPicker}
+                                disabled={receiptScan.loading}
+                            >
+                                <span className="dash-receipt-upload-title">
+                                    {receiptScan.loading ? 'Se scaneaza bonul...' : 'Adauga poza bonului'}
+                                </span>
+                                <span className="dash-receipt-upload-subtitle">
+                                    {receiptScan.fileName || 'JPG, PNG, BMP, TIFF'}
+                                </span>
+                            </button>
+
+                            {(receiptPreviewUrl || receiptScan.rawText || receiptScan.error) && (
+                                <div className="dash-receipt-result">
+                                    {receiptPreviewUrl && (
+                                        <div className="dash-receipt-preview">
+                                            <img src={receiptPreviewUrl} alt="Bon selectat" />
+                                        </div>
+                                    )}
+                                    <div className="dash-receipt-meta">
+                                        {receiptScan.loading && <span>OCR in lucru...</span>}
+                                        {receiptScan.error && <span className="dash-receipt-error">{receiptScan.error}</span>}
+                                        {receiptScan.rawText && (
+                                            <details className="dash-receipt-text">
+                                                <summary>Text OCR</summary>
+                                                <pre>{receiptScan.rawText}</pre>
+                                            </details>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
                         <input
                             type="text"
                             placeholder="Descriere (ex: Pizza)"
@@ -575,6 +865,8 @@ function Dashboard() {
                         />
                         <input
                             type="number"
+                            step="0.01"
+                            min="0"
                             placeholder="Sumă (RON)"
                             value={expenseForm.amount}
                             onChange={(e) => setExpenseForm({ ...expenseForm, amount: e.target.value })}
@@ -582,16 +874,104 @@ function Dashboard() {
                         <select
                             className="dash-form-select"
                             value={expenseForm.groupId}
-                            onChange={(e) => setExpenseForm({ ...expenseForm, groupId: e.target.value })}
+                            onChange={(e) => handleExpenseGroupChange(e.target.value)}
                         >
                             <option value={0}>— Fără grup (cheltuială personală) —</option>
                             {groups.map((g) => (
                                 <option key={g.id} value={g.id}>{g.groupName || g.username}</option>
                             ))}
                         </select>
+
+                        {receiptReadyToAssign && (
+                            <div className="dash-receipt-items">
+                                <div className="dash-receipt-items-head">
+                                    <div>
+                                        <span className="dash-receipt-items-title">Produse detectate</span>
+                                        <span className="dash-receipt-items-subtitle">Total randuri: {receiptItemsTotal} RON</span>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        className="dash-action-btn dash-receipt-add-row"
+                                        onClick={addManualReceiptItem}
+                                    >
+                                        + Produs
+                                    </button>
+                                </div>
+
+                                {!expenseGroupId && (
+                                    <p className="dash-receipt-note">Alege un grup ca sa poti bifa cine a consumat fiecare produs.</p>
+                                )}
+
+                                {expenseGroupId > 0 && receiptGroupMembers.length === 0 && (
+                                    <p className="dash-receipt-note">Nu am gasit membri pentru grupul selectat.</p>
+                                )}
+
+                                {receiptItems.length === 0 && (
+                                    <p className="dash-receipt-note">Nu am detectat produse clare. Adauga randurile manual.</p>
+                                )}
+
+                                {receiptItems.map((item) => (
+                                    <div className="dash-receipt-item" key={item.localId}>
+                                        <div className="dash-receipt-item-fields">
+                                            <input
+                                                type="text"
+                                                value={item.description}
+                                                onChange={(e) => updateReceiptItem(item.localId, { description: e.target.value })}
+                                                placeholder="Produs"
+                                            />
+                                            <input
+                                                type="number"
+                                                step="0.01"
+                                                min="0"
+                                                value={item.amount}
+                                                onChange={(e) => updateReceiptItem(item.localId, { amount: e.target.value })}
+                                                placeholder="Suma"
+                                            />
+                                            <button
+                                                type="button"
+                                                className="dash-delete-btn"
+                                                onClick={() => removeReceiptItem(item.localId)}
+                                                title="Sterge produs"
+                                            >
+                                                x
+                                            </button>
+                                        </div>
+
+                                        {expenseGroupId > 0 && (
+                                            <div className="dash-consumer-chips">
+                                                {receiptGroupMembers.map((member) => {
+                                                    const isSelected = item.consumerUserIds.includes(member.id);
+                                                    return (
+                                                        <button
+                                                            type="button"
+                                                            key={member.id}
+                                                            className={`dash-consumer-chip ${isSelected ? 'dash-consumer-chip--active' : ''}`}
+                                                            onClick={() => toggleReceiptConsumer(item.localId, member.id)}
+                                                        >
+                                                            {member.username}
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+
+                                <button
+                                    type="button"
+                                    className="dash-action-btn dash-action-btn--primary"
+                                    onClick={handleSaveItemizedReceipt}
+                                    disabled={savingItemizedReceipt || receiptItems.length === 0 || receiptHasUnassignedItems || !expenseGroupId}
+                                >
+                                    {savingItemizedReceipt ? 'Se salveaza...' : 'Salveaza bon itemizat'}
+                                </button>
+                            </div>
+                        )}
                         <div className="dash-form-btns">
-                            <button type="submit" className="dash-action-btn dash-action-btn--primary">Adaugă</button>
-                            <button type="button" onClick={() => setShowExpenseForm(false)} className="dash-action-btn">Anulează</button>
+                            <button type="submit" className={`dash-action-btn ${receiptItems.length ? '' : 'dash-action-btn--primary'}`}>
+                                {receiptItems.length ? 'Salveaza ca total' : 'Adaugă'}
+                            </button>
+                            <button type="button" onClick={() => { resetReceiptScan(); setShowExpenseForm(false); }} className="dash-action-btn">Anulează</button>
                         </div>
                     </form>
                 )}
@@ -631,6 +1011,8 @@ function Dashboard() {
                         </select>
                         <input
                             type="number"
+                            step="0.01"
+                            min="0"
                             placeholder="Sumă (RON)"
                             value={debtForm.amount}
                             onChange={(e) => setDebtForm({ ...debtForm, amount: e.target.value })}
@@ -888,6 +1270,8 @@ function Dashboard() {
                                                         />
                                                         <input
                                                             type="number"
+                                                            step="0.01"
+                                                            min="0"
                                                             placeholder="Sumă"
                                                             value={groupExpenseByGroup[g.id]?.amount || ''}
                                                             onChange={(e) => setGroupExpenseByGroup(prev => ({

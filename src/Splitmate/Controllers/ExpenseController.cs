@@ -86,6 +86,125 @@ namespace SplitmateAPI.Controllers
             return Ok(newExpense);
         }
 
+        [HttpPost("itemized-receipt")]
+        public async Task<ActionResult> AddItemizedReceipt([FromBody] ItemizedReceiptRequest request)
+        {
+            if (request.PayerId <= 0)
+            {
+                return BadRequest("PayerId este obligatoriu.");
+            }
+
+            if (request.GroupId <= 0)
+            {
+                return BadRequest("Alege un grup pentru bonul itemizat.");
+            }
+
+            if (request.Items == null || request.Items.Count == 0)
+            {
+                return BadRequest("Adauga cel putin un produs din bon.");
+            }
+
+            var payerExists = await _context.Users.AnyAsync(u => u.Id == request.PayerId);
+            if (!payerExists)
+            {
+                return BadRequest("Platitorul nu exista.");
+            }
+
+            var groupExists = await _context.Groups.AnyAsync(g => g.Id == request.GroupId);
+            if (!groupExists)
+            {
+                return BadRequest("Grupul nu exista.");
+            }
+
+            var groupMemberIds = await _context.GroupMembers
+                .Where(gm => gm.GroupId == request.GroupId)
+                .Select(gm => gm.UserId)
+                .Distinct()
+                .ToListAsync();
+
+            if (!groupMemberIds.Contains(request.PayerId))
+            {
+                return BadRequest("Platitorul trebuie sa fie membru in grup.");
+            }
+
+            var normalizedItems = new List<ItemizedReceiptItemRequest>();
+            foreach (var item in request.Items)
+            {
+                var description = item.Description.Trim();
+                var consumers = (item.ConsumerUserIds ?? new List<int>()).Distinct().OrderBy(id => id).ToList();
+
+                if (string.IsNullOrWhiteSpace(description))
+                {
+                    return BadRequest("Fiecare produs trebuie sa aiba o descriere.");
+                }
+
+                if (item.Amount <= 0)
+                {
+                    return BadRequest($"Produsul '{description}' trebuie sa aiba suma pozitiva.");
+                }
+
+                if (consumers.Count == 0)
+                {
+                    return BadRequest($"Selecteaza cel putin un consumator pentru '{description}'.");
+                }
+
+                if (consumers.Any(userId => !groupMemberIds.Contains(userId)))
+                {
+                    return BadRequest($"Toti consumatorii pentru '{description}' trebuie sa fie membri in grup.");
+                }
+
+                normalizedItems.Add(new ItemizedReceiptItemRequest
+                {
+                    Description = description,
+                    Amount = Math.Round(item.Amount, 2, MidpointRounding.AwayFromZero),
+                    ConsumerUserIds = consumers
+                });
+            }
+
+            var createdExpenses = new List<Expense>();
+            var createdDebts = new List<Debt>();
+            var expenseDate = request.Date == default ? DateTime.UtcNow : request.Date;
+            var strategy = _context.Database.CreateExecutionStrategy();
+
+            await strategy.ExecuteAsync(async () =>
+            {
+                createdExpenses.Clear();
+                createdDebts.Clear();
+                await using var tx = await _context.Database.BeginTransactionAsync();
+
+                foreach (var item in normalizedItems)
+                {
+                    var expense = new Expense
+                    {
+                        Amount = item.Amount,
+                        Date = expenseDate,
+                        Description = item.Description,
+                        PayerId = request.PayerId,
+                        GroupId = request.GroupId
+                    };
+
+                    _context.Expenses.Add(expense);
+                    await _context.SaveChangesAsync();
+                    createdExpenses.Add(expense);
+
+                    var itemDebts = BuildDebtsForItem(expense.Id, request.PayerId, item.Amount, item.ConsumerUserIds);
+                    _context.Debts.AddRange(itemDebts);
+                    createdDebts.AddRange(itemDebts);
+                }
+
+                await _context.SaveChangesAsync();
+                await tx.CommitAsync();
+            });
+
+            return Ok(new
+            {
+                message = "Bonul itemizat a fost salvat.",
+                expenses = createdExpenses,
+                debts = createdDebts,
+                totalAmount = normalizedItems.Sum(item => item.Amount)
+            });
+        }
+
         [HttpPut("{id}")]
         public async Task<ActionResult<Expense>> UpdateExpense(int id, [FromBody] UpdateExpenseRequest request)
         {
@@ -146,6 +265,21 @@ namespace SplitmateAPI.Controllers
             public decimal? Amount { get; set; }
         }
 
+        public class ItemizedReceiptRequest
+        {
+            public int PayerId { get; set; }
+            public int GroupId { get; set; }
+            public DateTime Date { get; set; }
+            public List<ItemizedReceiptItemRequest> Items { get; set; } = new();
+        }
+
+        public class ItemizedReceiptItemRequest
+        {
+            public string Description { get; set; } = string.Empty;
+            public decimal Amount { get; set; }
+            public List<int> ConsumerUserIds { get; set; } = new();
+        }
+
         private async Task RebuildExpenseDebts(Expense expense)
         {
             var currentDebts = await _context.Debts
@@ -202,6 +336,30 @@ namespace SplitmateAPI.Controllers
                     ExpenseId = expense.Id
                 });
             }
+        }
+
+        private static List<Debt> BuildDebtsForItem(int expenseId, int payerId, decimal amount, List<int> consumerUserIds)
+        {
+            var consumers = consumerUserIds.Distinct().OrderBy(id => id).ToList();
+            var totalCents = (int)Math.Round(amount * 100m, MidpointRounding.AwayFromZero);
+            var baseShareCents = totalCents / consumers.Count;
+            var remainder = totalCents % consumers.Count;
+
+            return consumers
+                .Select((userId, index) => new
+                {
+                    UserId = userId,
+                    ShareCents = baseShareCents + (index < remainder ? 1 : 0)
+                })
+                .Where(share => share.UserId != payerId && share.ShareCents > 0)
+                .Select(share => new Debt
+                {
+                    Amount = share.ShareCents / 100m,
+                    FromUserId = share.UserId,
+                    ToUserId = payerId,
+                    ExpenseId = expenseId
+                })
+                .ToList();
         }
     }
 }

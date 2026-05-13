@@ -118,6 +118,34 @@ export async function addExpense(data) {
     }, 'Eroare la adăugarea cheltuielii');
 }
 
+// Înlocuiește vechea funcție scanReceipt cu aceasta:
+export const scanReceipt = async (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    // Folosim variabila API deja definită în fișier (http://localhost:7252/api)
+    const response = await fetch(`${API}/Ocr/scan`, { 
+        method: 'POST',
+        body: formData,
+        // NU adăuga headers: { 'Content-Type': 'multipart/form-data' } !
+        // Browserul trebuie să-și genereze singur 'boundary' pentru fișier.
+    });
+
+    if (!response.ok) {
+        // Folosim helper-ul tău de erori pentru a vedea ce zice serverul
+        await parseResponseError(response, 'Eroare la scanarea bonului');
+    }
+    return await response.json();
+};
+
+export async function addItemizedReceipt(data) {
+    return request('/Expense/itemized-receipt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+    }, 'Eroare la salvarea bonului itemizat');
+}
+
 export async function updateExpense(id, data) {
     return request(`/Expense/${id}`, {
         method: 'PUT',

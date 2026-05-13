@@ -43,9 +43,9 @@ namespace Splitmate
             {
                 options.AddPolicy("AllowReact", policy =>
                 {
-                    policy.WithOrigins(allowedOrigins)
-                          .AllowAnyHeader()
-                          .AllowAnyMethod();
+                    policy.AllowAnyOrigin()   // Permite orice origine (pentru a elimina eroarea de Fetch)
+                          .AllowAnyHeader()   // Permite orice header (necesar pentru multipart/form-data)
+                          .AllowAnyMethod();  // Permite POST, GET, etc.
                 });
             });
 
@@ -90,7 +90,7 @@ namespace Splitmate
                 });
             });
 
-            app.UseHttpsRedirection();
+            // app.UseHttpsRedirection();
             app.UseForwardedHeaders(new ForwardedHeadersOptions
             {
                 ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
@@ -104,7 +104,7 @@ namespace Splitmate
             app.MapControllers();
             app.MapHealthChecks("/health");
 
-            app.Run();
+                app.Run();
         }
 
         private static void ApplyDatabaseMigrations(WebApplication app)
